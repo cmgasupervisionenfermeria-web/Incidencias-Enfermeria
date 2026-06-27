@@ -486,7 +486,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 // ════════════════════════════════════════
 // CONFIG
 // ════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxng3UqOdUF9JyInth4-_jCLOX-qgYvPPLo7C7LiehL5uMR4N7undxxRnYn3U-Dbvw5pg/exec'; // ← Pega aquí la URL del despliegue de Apps Script
+const GAS_URL = 'TU_URL_GAS_AQUI'; // ← Pega aquí la URL del despliegue de Apps Script
 const GAS_CONFIGURADO = GAS_URL !== 'TU_URL_GAS_AQUI';
 const PIN_CORRECTO = 'CMGA1';
 const CACHE_KEY = 'incidencias_db_v1';
@@ -1070,16 +1070,24 @@ function renderPersonal(){
     tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Sin personal registrado</td></tr>';
     return;
   }
-  tbody.innerHTML = lista.map(function(p){
-    return '<tr>'
-      +'<td class="td-left"><span class="td-emp">'+p.noEmp+'</span></td>'
+  // Limpiar tbody
+  while(tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  lista.forEach(function(p){
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td class="td-left"><span class="td-emp">'+p.noEmp+'</span></td>'
       +'<td class="td-left"><span class="td-nombre">'+p.nombre+'</span></td>'
       +'<td class="td-left"><span class="td-puesto">'+p.puesto+'</span></td>'
-      +'<td class="td-left"><span class="turno-badge">'+TURNOS_LABEL[p.turno]+'</span></td>'
+      +'<td class="td-left"><span class="turno-badge">'+(TURNOS_LABEL[p.turno]||p.turno)+'</span></td>'
       +'<td class="td-left"><span class="td-ingreso">'+p.fechaIngreso+'</span></td>'
-      +'<td><button class="btn btn-ghost" style="font-size:11px;padding:4px 8px" onclick="requirePin(function(){editarPersonal(\''+p.noEmp+'\')})">✏</button></td>'
-      +'</tr>';
-  }).join('');
+      +'<td></td>';
+    const btnEdit = document.createElement('button');
+    btnEdit.className = 'btn btn-ghost';
+    btnEdit.style.cssText = 'font-size:11px;padding:4px 8px';
+    btnEdit.textContent = '✏';
+    (function(emp){ btnEdit.onclick = function(){ requirePin(function(){ editarPersonal(emp); }); }; })(p.noEmp);
+    tr.lastElementChild.appendChild(btnEdit);
+    tbody.appendChild(tr);
+  });
 }
 
 // ════════════════════════════════════════

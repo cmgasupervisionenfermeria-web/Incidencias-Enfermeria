@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Incidencias Enfermería CMGA</title>
+<style>
+:root{
+  --bg:#F8FAFC;--bg2:#F1F5F9;--bg3:#E2E8F0;
+  --nav:#0F172A;--nav2:#1E293B;
+  --az:#6366F1;--az2:#4F46E5;--az3:#EEF2FF;--az4:#C7D2FE;
+  --txt:#1E293B;--txt2:#475569;--txt3:#94A3B8;
+  --verde:#16A34A;--verde2:#DCFCE7;
+  --rojo:#DC2626;--rojo2:#FEE2E2;
+  --naranja:#EA580C;--naranja2:#FEF3C7;
+  --amarillo:#D97706;--amarillo2:#FEF9C3;
+  --gris:#64748B;--gris2:#CBD5E1;
+  --radio:8px;--radio2:12px;
+  --sombra:0 1px 3px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06);
+  --sombra2:0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);font-size:13px}
+
+/* NAV */
+.nav{background:var(--nav);display:flex;align-items:center;gap:4px;padding:0 16px;height:52px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nav-brand{color:#fff;font-weight:700;font-size:15px;letter-spacing:-.3px;margin-right:12px;white-space:nowrap}
+.nav-brand span{color:var(--az4);margin-right:4px}
+.nav-tab{background:none;border:none;color:#94A3B8;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;white-space:nowrap;transition:all .15s}
+.nav-tab:hover{color:#fff;background:rgba(255,255,255,.08)}
+.nav-tab.active{color:#fff;background:var(--az2)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.btn-sync{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500}
+.btn-sync:hover{background:rgba(255,255,255,.2)}
+.btn-pin{background:var(--az2);border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500}
+
+/* PAGES */
+.page{display:none;padding:20px;max-width:1400px;margin:0 auto}
+.page.active{display:block}
+
+/* PERIOD BAR */
+.period-bar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.period-btn{background:var(--bg2);border:1px solid var(--bg3);color:var(--txt2);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+.period-btn:hover{border-color:var(--az);color:var(--az)}
+.period-btn.active{background:var(--az);border-color:var(--az);color:#fff}
+.period-label{font-size:15px;font-weight:700;color:var(--txt)}
+.period-nav{display:flex;align-items:center;gap:4px}
+.period-nav button{background:var(--bg2);border:1px solid var(--bg3);color:var(--txt2);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
+.period-nav button:hover{border-color:var(--az);color:var(--az)}
+.btn{padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+.btn-primary{background:var(--az);color:#fff}
+.btn-primary:hover{background:var(--az2)}
+.btn-ghost{background:transparent;border:1px solid var(--bg3);color:var(--txt2)}
+.btn-ghost:hover{border-color:var(--az);color:var(--az)}
+.btn-danger{background:var(--rojo2);color:var(--rojo);border:none}
+.btn-danger:hover{background:var(--rojo);color:#fff}
+
+/* TURNO CARD */
+.turno-card{background:#fff;border-radius:var(--radio2);box-shadow:var(--sombra);overflow:hidden;margin-bottom:16px}
+.turno-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--bg3)}
+.turno-title{font-size:13px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:8px}
+.turno-badge{background:var(--az3);color:var(--az2);padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}
+.turno-count{font-size:12px;color:var(--txt3);margin-left:auto;margin-right:12px}
+
+/* TABLE */
+.inc-table-wrap{overflow-x:auto}
+.inc-table{width:100%;border-collapse:collapse;min-width:900px}
+.inc-table th{background:var(--bg2);color:var(--txt3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:8px 6px;text-align:center;border-bottom:2px solid var(--bg3);white-space:nowrap;position:sticky;top:52px}
+.inc-table th.th-left{text-align:left;padding-left:12px}
+.inc-table td{padding:5px 4px;text-align:center;border-bottom:1px solid var(--bg3);vertical-align:middle}
+.inc-table td.td-left{text-align:left;padding-left:12px}
+.inc-table tr:hover{background:var(--bg)}
+.td-emp{font-family:monospace;font-size:11px;color:var(--txt3)}
+.td-nombre{font-weight:600;color:var(--txt);font-size:12px}
+.td-puesto{font-size:11px;color:var(--txt3)}
+.td-ingreso{font-size:11px;color:var(--txt3);white-space:nowrap}
+.td-obs{font-size:11px;color:var(--txt2);max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* INCIDENCIA CELLS */
+.inc-cell{width:32px;min-width:28px;cursor:pointer;border-radius:4px;transition:all .1s;user-select:none;font-size:10px;font-weight:700;padding:4px 2px;position:relative}
+.inc-cell:hover{transform:scale(1.15);z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.ic-A{background:#DBEAFE;color:#1D4ED8}
+.ic-F{background:var(--rojo2);color:var(--rojo)}
+.ic-R{background:#FEF9C3;color:#854D0E}
+.ic-I{background:#F3E8FF;color:#7E22CE}
+.ic-V{background:#DCFCE7;color:#15803D}
+.ic-M{background:#FEF3C7;color:#92400E}
+.ic-B{background:#F1F5F9;color:#475569}
+.ic-FJ{background:#FEE2E2;color:#991B1B}
+.ic-FE{background:#FEF3C7;color:#92400E}
+.ic-DT{background:#E0F2FE;color:#0369A1}
+.ic-Ps{background:#FFF7ED;color:#C2410C}
+.ic-Pe{background:#FFF7ED;color:#C2410C}
+.ic-LC{background:#F0FDF4;color:#166534}
+.ic-L{background:#FEF2F2;color:#B91C1C}
+.ic-O{background:#EFF6FF;color:#1D4ED8}
+.ic-DV{background:#F0FDF4;color:#166534}
+.ic-BCS{background:#F5F3FF;color:#6D28D9}
+.ic-F4H{background:#FEF9C3;color:#92400E}
+.ic-F8H{background:#FEF3C7;color:#78350F}
+.ic-vacio{background:transparent;color:transparent}
+.ic-DIA{background:var(--bg2);color:var(--txt3);font-size:9px}
+
+/* ALERTAS en fila */
+.alerta-row td{border-left:3px solid var(--naranja)}
+.alerta-ps td{border-left:3px solid var(--rojo)}
+.alerta-badge{display:inline-block;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;margin-left:4px}
+.ab-m{background:var(--naranja2);color:var(--naranja)}
+.ab-ps{background:var(--rojo2);color:var(--rojo)}
+
+/* HEADER días */
+.th-dia{font-size:10px;padding:4px 2px;width:32px}
+.th-dia-label{font-weight:700;color:var(--txt2)}
+.th-dia-dow{font-size:9px;color:var(--txt3);font-weight:400}
+.th-dia.dow-d{color:var(--rojo)!important}
+.th-dia.dow-d .th-dia-label{color:var(--rojo)}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:var(--radio2);box-shadow:0 20px 60px rgba(0,0,0,.3);width:520px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal-header{padding:16px 20px;border-bottom:1px solid var(--bg3);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-size:15px;font-weight:700}
+.modal-close{background:none;border:none;color:var(--txt3);font-size:20px;cursor:pointer;line-height:1}
+.modal-body{padding:20px}
+.modal-footer{padding:12px 20px;border-top:1px solid var(--bg3);display:flex;gap:8px;justify-content:flex-end}
+.form-row{margin-bottom:14px}
+.form-label{display:block;font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+.form-input,.form-select,.form-textarea{width:100%;padding:8px 10px;border:1.5px solid var(--bg3);border-radius:6px;font-size:13px;color:var(--txt);background:#fff;outline:none;transition:border-color .15s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--az)}
+.form-textarea{resize:vertical;min-height:60px}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* PICKER DE INCIDENCIA */
+.inc-picker{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:8px 0}
+.inc-pick-btn{border:2px solid transparent;border-radius:6px;padding:6px 4px;cursor:pointer;font-size:10px;font-weight:700;text-align:center;transition:all .15s}
+.inc-pick-btn:hover{transform:scale(1.05)}
+.inc-pick-btn.selected{border-color:var(--az);box-shadow:0 0 0 2px var(--az4)}
+.inc-pick-vaciar{background:var(--bg2);color:var(--txt3);border:1.5px dashed var(--bg3);border-radius:6px;padding:6px;cursor:pointer;font-size:11px;font-weight:600;text-align:center;margin-top:4px;width:100%}
+
+/* CONCENTRADO */
+.conc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px}
+.conc-card{background:#fff;border-radius:var(--radio2);box-shadow:var(--sombra);padding:16px}
+.conc-card-title{font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.conc-stat{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bg3)}
+.conc-stat:last-child{border-bottom:none}
+.conc-stat-label{font-size:12px;color:var(--txt2)}
+.conc-stat-val{font-size:13px;font-weight:700;color:var(--txt)}
+
+/* ALERTAS PANEL */
+.alertas-panel{background:#fff;border-radius:var(--radio2);box-shadow:var(--sombra);padding:16px;margin-bottom:16px}
+.alerta-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;margin-bottom:6px}
+.alerta-item.nivel-m{background:var(--naranja2);border-left:3px solid var(--naranja)}
+.alerta-item.nivel-ps{background:var(--rojo2);border-left:3px solid var(--rojo)}
+.alerta-icon{font-size:16px}
+.alerta-txt{flex:1}
+.alerta-nombre{font-weight:700;font-size:12px}
+.alerta-desc{font-size:11px;color:var(--txt2)}
+
+/* EVENTUAL */
+.eventual-table{width:100%;border-collapse:collapse}
+.eventual-table th{background:var(--bg2);color:var(--txt3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:8px 12px;text-align:left;border-bottom:2px solid var(--bg3)}
+.eventual-table td{padding:8px 12px;border-bottom:1px solid var(--bg3);font-size:12px}
+.eventual-table tr:hover{background:var(--bg)}
+
+/* PERSONAL CATALOG */
+.personal-filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.filter-chip{padding:5px 12px;border-radius:99px;border:1.5px solid var(--bg3);background:#fff;color:var(--txt2);cursor:pointer;font-size:11px;font-weight:600}
+.filter-chip.active{background:var(--az);border-color:var(--az);color:#fff}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--nav);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;z-index:500;opacity:0;transform:translateY(10px);transition:all .25s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+
+/* LOADER */
+.loader-overlay{display:none;position:fixed;inset:0;background:rgba(248,250,252,.85);z-index:300;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.loader-overlay.open{display:flex}
+.loader-spin{width:32px;height:32px;border:3px solid var(--bg3);border-top-color:var(--az);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-txt{font-size:13px;color:var(--txt2);font-weight:500}
+
+/* PIN */
+.pin-input{letter-spacing:8px;font-size:20px;font-weight:700;text-align:center}
+
+/* LEYENDA */
+.leyenda{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.ley-item{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:700}
+.ley-dot{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
+
+.empty-msg{text-align:center;padding:32px;color:var(--txt3);font-size:13px}
+
+.sec-title{font-size:18px;font-weight:800;color:var(--txt);margin-bottom:4px}
+.sec-sub{font-size:12px;color:var(--txt3);margin-bottom:16px}
+
+.dias-header{display:flex;gap:2px;font-size:9px;color:var(--txt3);margin-bottom:2px}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <span class="nav-brand"><span>📋</span>Incidencias Enfermería CMGA</span>
+  <button class="nav-tab active" onclick="showPage('tmat',this)">🌅 Matutino</button>
+  <button class="nav-tab" onclick="showPage('vesp',this)">🌆 Vespertino</button>
+  <button class="nav-tab" onclick="showPage('noct',this)">🌙 Nocturno</button>
+  <button class="nav-tab" onclick="showPage('sup',this)">⭐ Supervisoras</button>
+  <button class="nav-tab" onclick="showPage('ja',this)">📅 J. Acumulada</button>
+  <button class="nav-tab" onclick="showPage('eventual',this)">🔄 Eventual</button>
+  <button class="nav-tab" onclick="showPage('concentrado',this)">📊 Concentrado</button>
+  <button class="nav-tab" onclick="showPage('personal',this)">👥 Personal</button>
+  <button class="nav-tab" onclick="showPage('textra',this)">⏱ Tiempo Extra</button>
+  <div class="nav-right">
+    <button class="btn-pin" onclick="abrirPin()">🔒 PIN</button>
+    <button class="btn-sync" onclick="syncGAS()">↺ Sync</button>
+  </div>
+</nav>
+
+<!-- TOAST / LOADER -->
+<div id="toast" class="toast"></div>
+<div id="loader" class="loader-overlay"><div class="loader-spin"></div><div class="loader-txt" id="loader-txt">Cargando...</div></div>
+
+<!-- MODAL GENÉRICO -->
+<div id="modal-main" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Modal</span>
+      <button class="modal-close" onclick="cerrarModal('modal-main')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- MODAL PIN -->
+<div id="modal-pin" class="modal-overlay">
+  <div class="modal" style="width:320px">
+    <div class="modal-header">
+      <span class="modal-title">🔒 PIN de acceso</span>
+      <button class="modal-close" onclick="cerrarModal('modal-pin')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label class="form-label">Ingresa el PIN</label>
+        <input id="pinInput" type="password" class="form-input pin-input" placeholder="••••••" onkeydown="if(event.key==='Enter')verificarPin()">
+      </div>
+      <div id="pin-error" style="color:var(--rojo);font-size:12px;display:none">PIN incorrecto</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="verificarPin()">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     PAGES — TURNOS
+════════════════════════════════════════ -->
+
+<!-- MATUTINO -->
+<div class="page active" id="page-tmat">
+  <div class="period-bar">
+    <div class="period-nav">
+      <button onclick="cambiarPeriodo(-1)">‹</button>
+      <span id="period-label" class="period-label" style="min-width:220px;text-align:center">Cargando...</span>
+      <button onclick="cambiarPeriodo(1)">›</button>
+    </div>
+    <button class="period-btn active" id="btn-q1" onclick="setQuincena(1)">Q1 · 11–25</button>
+    <button class="period-btn" id="btn-q2" onclick="setQuincena(2)">Q2 · 26–10</button>
+    <button class="btn btn-primary" onclick="requirePin(function(){ abrirModalPersonal(null,'tmat'); })">+ Agregar</button>
+    <button class="btn btn-ghost" onclick="exportarCSV('tmat')">↓ CSV</button>
+  </div>
+  <div id="alertas-tmat"></div>
+  <div id="tabla-tmat"></div>
+</div>
+
+<!-- VESPERTINO -->
+<div class="page" id="page-vesp">
+  <div class="period-bar">
+    <div class="period-nav">
+      <button onclick="cambiarPeriodo(-1)">‹</button>
+      <span id="period-label-vesp" class="period-label" style="min-width:220px;text-align:center">Cargando...</span>
+      <button onclick="cambiarPeriodo(1)">›</button>
+    </div>
+    <button class="period-btn active" id="btn-q1-vesp" onclick="setQuincena(1)">Q1 · 11–25</button>
+    <button class="period-btn" id="btn-q2-vesp" onclick="setQuincena(2)">Q2 · 26–10</button>
+    <button class="btn btn-primary" onclick="requirePin(function(){ abrirModalPersonal(null,'vesp'); })">+ Agregar</button>
+    <button class="btn btn-ghost" onclick="exportarCSV('vesp')">↓ CSV</button>
+  </div>
+  <div id="alertas-vesp"></div>
+  <div id="tabla-vesp"></div>
+</div>
+
+<!-- NOCTURNO -->
+<div class="page" id="page-noct">
+  <div class="period-bar">
+    <div class="period-nav">
+      <button onclick="cambiarPeriodo(-1)">‹</button>
+      <span id="period-label-noct" class="period-label" style="min-width:220px;text-align:center">Cargando...</span>
+      <button onclick="cambiarPeriodo(1)">›</button>
+    </div>
+    <button class="period-btn active" id="btn-q1-noct" onclick="setQuincena(1)">Q1 · 11–25</button>
+    <button class="period-btn" id="btn-q2-noct" onclick="setQuincena(2)">Q2 · 26–10</button>
+    <button class="btn btn-primary" onclick="requirePin(function(){ abrirModalPersonal(null,'noct'); })">+ Agregar</button>
+    <button class="btn btn-ghost" onclick="exportarCSV('noct')">↓ CSV</button>
+  </div>
+  <div id="alertas-noct"></div>
+  <div id="tabla-noct"></div>
+</div>
+
+<!-- SUPERVISORAS -->
+<div class="page" id="page-sup">
+  <div class="period-bar">
+    <div class="period-nav">
+      <button onclick="cambiarPeriodo(-1)">‹</button>
+      <span id="period-label-sup" class="period-label" style="min-width:220px;text-align:center">Cargando...</span>
+      <button onclick="cambiarPeriodo(1)">›</button>
+    </div>
+    <button class="period-btn active" id="btn-q1-sup" onclick="setQuincena(1)">Q1 · 11–25</button>
+    <button class="period-btn" id="btn-q2-sup" onclick="setQuincena(2)">Q2 · 26–10</button>
+    <button class="btn btn-primary" onclick="requirePin(function(){ abrirModalPersonal(null,'sup'); })">+ Agregar</button>
+    <button class="btn btn-ghost" onclick="exportarCSV('sup')">↓ CSV</button>
+  </div>
+  <div id="alertas-sup"></div>
+  <div id="tabla-sup"></div>
+</div>
+
+<!-- JORNADA ACUMULADA -->
+<div class="page" id="page-ja">
+  <div class="period-bar">
+    <div class="period-nav">
+      <button onclick="cambiarPeriodo(-1)">‹</button>
+      <span id="period-label-ja" class="period-label" style="min-width:220px;text-align:center">Cargando...</span>
+      <button onclick="cambiarPeriodo(1)">›</button>
+    </div>
+    <button class="period-btn active" id="btn-q1-ja" onclick="setQuincena(1)">Q1 · 11–25</button>
+    <button class="period-btn" id="btn-q2-ja" onclick="setQuincena(2)">Q2 · 26–10</button>
+    <button class="btn btn-primary" onclick="requirePin(function(){ abrirModalPersonal(null,'ja'); })">+ Agregar</button>
+    <button class="btn btn-ghost" onclick="exportarCSV('ja')">↓ CSV</button>
+  </div>
+  <div id="alertas-ja"></div>
+  <div id="tabla-ja"></div>
+</div>
+
+<!-- EVENTUAL -->
+<div class="page" id="page-eventual">
+  <div class="period-bar">
+    <div class="period-nav">
+      <button onclick="cambiarPeriodo(-1)">‹</button>
+      <span id="period-label-eventual" class="period-label" style="min-width:220px;text-align:center">Cargando...</span>
+      <button onclick="cambiarPeriodo(1)">›</button>
+    </div>
+    <button class="period-btn active" id="btn-q1-eventual" onclick="setQuincena(1)">Q1 · 11–25</button>
+    <button class="period-btn" id="btn-q2-eventual" onclick="setQuincena(2)">Q2 · 26–10</button>
+    <button class="btn btn-primary" onclick="requirePin(abrirModalEventual)">+ Registrar eventual</button>
+    <button class="btn btn-ghost" onclick="exportarCSVEventual()">↓ CSV</button>
+  </div>
+  <div class="turno-card">
+    <div class="turno-header">
+      <span class="turno-title">🔄 Personal Eventual</span>
+      <span id="eventual-count" class="turno-count"></span>
+    </div>
+    <div class="inc-table-wrap">
+      <table class="eventual-table">
+        <thead><tr>
+          <th>Trabajador</th><th>Fecha</th><th>Área</th><th>Incidencia cubierta</th><th>Observaciones</th><th></th>
+        </tr></thead>
+        <tbody id="eventual-tbody"><tr><td colspan="6" class="empty-msg">Sin registros en este período</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CONCENTRADO -->
+<div class="page" id="page-concentrado">
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+    <div>
+      <div class="sec-title">📊 Concentrado Mensual</div>
+      <div class="sec-sub">Resumen de incidencias por persona y turno</div>
+    </div>
+    <select id="conc-mes" class="form-select" style="width:140px" onchange="renderConcentrado()">
+      <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+      <option value="3">Abril</option><option value="4">Mayo</option><option value="5" selected>Junio</option>
+      <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+      <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+    </select>
+    <select id="conc-anio" class="form-select" style="width:90px" onchange="renderConcentrado()">
+      <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option>
+    </select>
+    <select id="conc-turno" class="form-select" style="width:150px" onchange="renderConcentrado()">
+      <option value="">Todos los turnos</option>
+      <option value="tmat">Matutino</option>
+      <option value="vesp">Vespertino</option>
+      <option value="noct">Nocturno</option>
+      <option value="sup">Supervisoras</option>
+      <option value="ja">J. Acumulada</option>
+    </select>
+    <button class="btn btn-ghost" onclick="exportarCSVConcentrado()">↓ CSV</button>
+  </div>
+  <div id="concentrado-alertas" style="margin-bottom:12px"></div>
+  <div id="concentrado-body"><div class="empty-msg">Selecciona mes y año para ver el concentrado</div></div>
+</div>
+
+<!-- PERSONAL -->
+<div class="page" id="page-personal">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+    <div>
+      <div class="sec-title">👥 Catálogo de Personal</div>
+      <div class="sec-sub">Gestión del personal por turno</div>
+    </div>
+    <button class="btn btn-primary" onclick="requirePin(function(){ abrirModalPersonal(null,null); })">+ Nuevo empleado</button>
+  </div>
+  <div class="personal-filters">
+    <button class="filter-chip active" onclick="filtrarPersonal('',this)">Todos</button>
+    <button class="filter-chip" onclick="filtrarPersonal('tmat',this)">Matutino</button>
+    <button class="filter-chip" onclick="filtrarPersonal('vesp',this)">Vespertino</button>
+    <button class="filter-chip" onclick="filtrarPersonal('noct',this)">Nocturno</button>
+    <button class="filter-chip" onclick="filtrarPersonal('sup',this)">Supervisoras</button>
+    <button class="filter-chip" onclick="filtrarPersonal('ja',this)">J. Acumulada</button>
+    <button class="filter-chip" onclick="filtrarPersonal('eventual',this)">Eventual</button>
+  </div>
+  <div class="turno-card">
+    <div class="inc-table-wrap">
+      <table class="inc-table" id="personal-table">
+        <thead><tr>
+          <th class="th-left">No. Empleado</th>
+          <th class="th-left">Nombre</th>
+          <th class="th-left">Puesto</th>
+          <th class="th-left">Turno</th>
+          <th class="th-left">F. Ingreso</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="personal-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- TIEMPO EXTRA -->
+<div class="page" id="page-textra">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+    <div>
+      <div class="sec-title">⏱ Tiempo Extra</div>
+      <div class="sec-sub">Registro de horas extra por persona</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="requirePin(function(){ abrirModalTextra(null); })">+ Registrar tiempo extra</button>
+      <button class="btn btn-ghost" onclick="exportarCSVTextra()">↓ CSV</button>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <select id="textra-mes" class="form-select" style="width:140px" onchange="renderTextra()">
+      <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+      <option value="3">Abril</option><option value="4">Mayo</option><option value="5" selected>Junio</option>
+      <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+      <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+    </select>
+    <select id="textra-anio" class="form-select" style="width:90px" onchange="renderTextra()">
+      <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option>
+    </select>
+    <select id="textra-turno" class="form-select" style="width:150px" onchange="renderTextra()">
+      <option value="">Todos los turnos</option>
+      <option value="tmat">Matutino</option>
+      <option value="vesp">Vespertino</option>
+      <option value="noct">Nocturno</option>
+      <option value="sup">Supervisoras</option>
+      <option value="ja">J. Acumulada</option>
+    </select>
+  </div>
+  <div class="turno-card">
+    <div class="turno-header">
+      <span class="turno-title">⏱ Registros de tiempo extra</span>
+      <span id="textra-count" class="turno-count"></span>
+      <span id="textra-total" style="font-size:12px;font-weight:700;color:var(--az);margin-left:8px"></span>
+    </div>
+    <div class="inc-table-wrap">
+      <table class="eventual-table">
+        <thead><tr>
+          <th>No. Emp</th><th>Nombre</th><th>Turno</th><th>Fecha</th><th style="text-align:center">Horas</th><th>Motivo</th><th></th>
+        </tr></thead>
+        <tbody id="textra-tbody"><tr><td colspan="7" class="empty-msg">Sin registros</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════
+const GAS_URL = 'TU_URL_GAS_AQUI'; // ← Pega aquí la URL del despliegue de Apps Script
+const GAS_CONFIGURADO = GAS_URL !== 'TU_URL_GAS_AQUI';
+const PIN_CORRECTO = 'CMGA1';
+const CACHE_KEY = 'incidencias_db_v1';
+
+const TURNOS = ['tmat','vesp','noct','sup','ja'];
+const TURNOS_CAT = ['tmat','vesp','noct','sup','ja','eventual'];
+const TURNOS_LABEL = {tmat:'Matutino',vesp:'Vespertino',noct:'Nocturno',sup:'Supervisoras',ja:'J. Acumulada',eventual:'Eventual'};
+const TURNOS_ICON  = {tmat:'🌅',vesp:'🌆',noct:'🌙',sup:'⭐',ja:'📅',eventual:'🔄'};
+
+const INCIDENCIAS = [
+  {c:'A',  l:'Asistencia',       cls:'ic-A'},
+  {c:'F',  l:'Falta',            cls:'ic-F'},
+  {c:'R',  l:'Retardo',          cls:'ic-R'},
+  {c:'I',  l:'Incapacidad',      cls:'ic-I'},
+  {c:'V',  l:'Vacaciones',       cls:'ic-V'},
+  {c:'M',  l:'Movimiento',       cls:'ic-M'},
+  {c:'B',  l:'Baja',             cls:'ic-B'},
+  {c:'FJ', l:'Falta justif.',    cls:'ic-FJ'},
+  {c:'FE', l:'Festivo laborado', cls:'ic-FE'},
+  {c:'DT', l:'Desc. trabajado',  cls:'ic-DT'},
+  {c:'Ps', l:'Pase salida',      cls:'ic-Ps'},
+  {c:'Pe', l:'Pase entrada',     cls:'ic-Pe'},
+  {c:'LC', l:'Lic. con goce',    cls:'ic-LC'},
+  {c:'L',  l:'Lic. sin goce',    cls:'ic-L'},
+  {c:'O',  l:'Guardia otorgada', cls:'ic-O'},
+  {c:'DV', l:'Día vac.',         cls:'ic-DV'},
+  {c:'BC/S',l:'Beca c/goce',     cls:'ic-BCS'},
+  {c:'F4H',l:'Festiva 4h',       cls:'ic-F4H'},
+  {c:'F8H',l:'Festiva 8h',       cls:'ic-F8H'},
+];
+const INC_MAP = {};
+INCIDENCIAS.forEach(function(i){ INC_MAP[i.c]=i; });
+
+function cellInc(noEmp, fecha, turno, cls, inc){
+  return '<td class="inc-cell '+cls+'" data-emp="'+noEmp+'" data-fecha="'+fecha+'" data-turno="'+turno+'" onclick="clickCell(this)" title="'+fecha+'">'+inc+'</td>';
+}
+function clickCell(el){
+  const noEmp=el.dataset.emp, fecha=el.dataset.fecha, turno=el.dataset.turno;
+  requirePin(function(){ abrirPickerIncidencia(noEmp, fecha, turno); });
+}
+function clsInc(c){
+  if(!c) return 'ic-vacio';
+  const norm = c.replace('/','').replace(' ','');
+  if(norm==='BCS') return 'ic-BCS';
+  return INC_MAP[c]?INC_MAP[c].cls:'ic-A';
+}
+
+// ════════════════════════════════════════
+// ESTADO GLOBAL
+// ════════════════════════════════════════
+// quincena: {mes:5, anio:2026, q:1}  q=1→11-25, q=2→26-10
+let quincenaActual = (function(){
+  const hoy = new Date();
+  const d = hoy.getDate();
+  return {mes: hoy.getMonth(), anio: hoy.getFullYear(), q: d >= 11 && d <= 25 ? 1 : 2};
+})();
+
+let pinOK = false;
+let pinCB = null;
+let paginaActual = 'tmat';
+let filtroPersonal = '';
+
+// DB
+let DB = {
+  personal: [],   // {noEmp, nombre, fechaIngreso, puesto, turno, tipo, finRotacion, id}
+  incidencias: [], // {noEmp, fecha:'YYYY-MM-DD', incidencia, observacion, id}
+  eventual: [],   // {nombre, fecha:'YYYY-MM-DD', area, incidenciaCubierta, observacion, id}
+  textra: []      // {noEmp, nombre, turno, fecha, horas, motivo, id}
+};
+let nid = 1;
+
+// ════════════════════════════════════════
+// UTILIDADES FECHA
+// ════════════════════════════════════════
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const DIAS_SEMANA = ['D','L','M','M','J','V','S'];
+
+function fechaStr(anio, mes, dia){
+  return anio+'-'+String(mes+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+}
+
+function diasDelPeriodo(mes, anio, q){
+  // q=1: días 11 al 25 del mismo mes
+  // q=2: días 26 al fin de mes + días 1 al 10 del mes siguiente
+  const dias = [];
+  if(q === 1){
+    for(let d = 11; d <= 25; d++) dias.push({fecha: fechaStr(anio, mes, d), dia: d, mes: mes, anio: anio});
+  } else {
+    const diasMes = new Date(anio, mes+1, 0).getDate();
+    for(let d = 26; d <= diasMes; d++) dias.push({fecha: fechaStr(anio, mes, d), dia: d, mes: mes, anio: anio});
+    const mesSig = mes === 11 ? 0 : mes + 1;
+    const anioSig = mes === 11 ? anio + 1 : anio;
+    for(let d = 1; d <= 10; d++) dias.push({fecha: fechaStr(anioSig, mesSig, d), dia: d, mes: mesSig, anio: anioSig});
+  }
+  return dias;
+}
+
+function dowLetra(fecha){
+  const d = new Date(fecha+'T12:00:00');
+  return DIAS_SEMANA[d.getDay()];
+}
+function esDomingo(fecha){
+  return new Date(fecha+'T12:00:00').getDay() === 0;
+}
+function esSabado(fecha){
+  return new Date(fecha+'T12:00:00').getDay() === 6;
+}
+
+function labelQuincena(mes, anio, q){
+  if(q === 1) return '11 – 25 de '+MESES[mes]+' '+anio;
+  const mesSig = mes === 11 ? 0 : mes + 1;
+  const anioSig = mes === 11 ? anio + 1 : anio;
+  return '26 '+MESES_CORTO[mes]+' – 10 '+MESES[mesSig]+' '+anioSig;
+}
+
+function mesAnioLabel(mes, anio){
+  return MESES[mes].charAt(0).toUpperCase()+MESES[mes].slice(1)+' '+anio;
+}
+
+// ════════════════════════════════════════
+// NAV / PÁGINAS
+// ════════════════════════════════════════
+function showPage(id, btn){
+  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.nav-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  paginaActual = id;
+  actualizarLabels();
+  renderPagina(id);
+}
+
+function actualizarLabels(){
+  const {mes, anio, q} = quincenaActual;
+  const label = labelQuincena(mes, anio, q);
+  ['tmat','vesp','noct','sup','ja','eventual'].forEach(function(t){
+    const el = document.getElementById('period-label'+(t==='tmat'?'':'-'+t));
+    if(el) el.textContent = label;
+    const q1 = document.getElementById('btn-q1'+(t==='tmat'?'':'-'+t));
+    const q2 = document.getElementById('btn-q2'+(t==='tmat'?'':'-'+t));
+    if(q1){ q1.classList.toggle('active', q===1); }
+    if(q2){ q2.classList.toggle('active', q===2); }
+  });
+}
+
+function renderPagina(id){
+  if(TURNOS.includes(id)) renderTurno(id);
+  else if(id==='eventual') renderEventual();
+  else if(id==='concentrado') renderConcentrado();
+  else if(id==='textra') renderTextra();
+  else if(id==='personal') renderPersonal();
+}
+
+function cambiarPeriodo(dir){
+  let {mes, anio, q} = quincenaActual;
+  if(dir === 1){
+    if(q === 1){ q = 2; }
+    else { q = 1; mes++; if(mes > 11){ mes = 0; anio++; } }
+  } else {
+    if(q === 2){ q = 1; }
+    else { q = 2; mes--; if(mes < 0){ mes = 11; anio--; } }
+  }
+  quincenaActual = {mes, anio, q};
+  actualizarLabels();
+  renderPagina(paginaActual);
+}
+
+function setQuincena(q){
+  quincenaActual.q = q;
+  actualizarLabels();
+  renderPagina(paginaActual);
+}
+
+// ════════════════════════════════════════
+// ALERTAS
+// ════════════════════════════════════════
+function calcularAlertas(turno, mes, anio){
+  // Calcular en el mes completo (Q1 + Q2)
+  const alertas = [];
+  const personal = DB.personal.filter(function(p){ return p.turno === turno; });
+  personal.forEach(function(p){
+    const incMes = DB.incidencias.filter(function(i){
+      const d = new Date(i.fecha+'T12:00:00');
+      return i.noEmp === p.noEmp && d.getMonth() === mes && d.getFullYear() === anio;
+    });
+    const movs = incMes.filter(function(i){ return i.incidencia === 'M'; }).length;
+    const pases = incMes.filter(function(i){ return i.incidencia === 'Ps'; }).length;
+    if(movs >= 4) alertas.push({tipo:'M', nombre:p.nombre, noEmp:p.noEmp, valor:movs, msg:movs+' movimientos en el mes'});
+    if(pases >= 2) alertas.push({tipo:'Ps', nombre:p.nombre, noEmp:p.noEmp, valor:pases, msg:pases+' pases de salida en el mes'});
+  });
+  return alertas;
+}
+
+function renderAlertas(turno){
+  const {mes, anio} = quincenaActual;
+  const alertas = calcularAlertas(turno, mes, anio);
+  const el = document.getElementById('alertas-'+turno);
+  if(!el) return;
+  if(!alertas.length){ el.innerHTML=''; return; }
+  el.innerHTML = '<div class="alertas-panel"><div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">⚠️ Alertas del período</div>'
+    + alertas.map(function(a){
+      const cls = a.tipo==='Ps'?'nivel-ps':'nivel-m';
+      const icon = a.tipo==='Ps'?'🚨':'⚠️';
+      return '<div class="alerta-item '+cls+'">'
+        +'<span class="alerta-icon">'+icon+'</span>'
+        +'<div class="alerta-txt"><div class="alerta-nombre">'+a.nombre+'</div>'
+        +'<div class="alerta-desc">'+a.msg+'</div></div></div>';
+    }).join('') + '</div>';
+}
+
+// ════════════════════════════════════════
+// RENDER TURNO
+// ════════════════════════════════════════
+function renderTurno(turno){
+  renderAlertas(turno);
+  const {mes, anio, q} = quincenaActual;
+  const personalTodo = DB.personal.filter(function(p){ return p.turno === turno; })
+    .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
+  const personal = personalTodo.filter(function(p){ return p.tipo !== 'pasante'; });
+  const pasantes = personalTodo.filter(function(p){ return p.tipo === 'pasante'; });
+  const dias = diasDelPeriodo(mes, anio, q);
+  const {mes:mes2, anio:anio2} = quincenaActual;
+  const alertasMes = calcularAlertas(turno, mes2, anio2);
+  const empConAlerta = {};
+  alertasMes.forEach(function(a){ empConAlerta[a.noEmp] = empConAlerta[a.noEmp]||[]; empConAlerta[a.noEmp].push(a); });
+
+  const container = document.getElementById('tabla-'+turno);
+  if(!personal.length){
+    container.innerHTML = '<div class="turno-card"><div class="empty-msg">No hay personal en este turno. <button class="btn btn-primary" style="margin-left:8px" onclick="requirePin(function(){abrirModalPersonal(null,\''+turno+'\')})">+ Agregar</button></div></div>';
+    return;
+  }
+
+  let html = '<div class="turno-card">';
+  html += '<div class="turno-header"><span class="turno-title">'+TURNOS_ICON[turno]+' '+TURNOS_LABEL[turno]+'</span>'
+    +'<span class="turno-count">'+personal.length+' personas</span>'
+    +'</div>';
+  html += '<div class="inc-table-wrap"><table class="inc-table"><thead><tr>';
+  html += '<th class="th-left" style="min-width:70px">No. Emp</th>';
+  html += '<th class="th-left" style="min-width:160px">Nombre</th>';
+  html += '<th class="th-left" style="min-width:80px">Puesto</th>';
+  html += '<th class="th-left" style="min-width:80px">F. Ingreso</th>';
+
+  dias.forEach(function(d){
+    const dow = dowLetra(d.fecha);
+    const esFin = dow === 'D' || dow === 'S';
+    html += '<th class="th-dia'+(esFin?' dow-d':'')+'"><div class="th-dia-label">'+d.dia+'</div><div class="th-dia-dow">'+dow+'</div></th>';
+  });
+  html += '<th style="min-width:120px">Observaciones</th><th></th>';
+  html += '</tr></thead><tbody>';
+
+  personal.forEach(function(p){
+    const alerts = empConAlerta[p.noEmp] || [];
+    const tieneAlertaM = alerts.some(function(a){ return a.tipo==='M'; });
+    const tieneAlertaPs = alerts.some(function(a){ return a.tipo==='Ps'; });
+    const rowCls = tieneAlertaPs ? ' alerta-ps' : (tieneAlertaM ? ' alerta-row' : '');
+
+    // Observaciones del período (tomar la más reciente)
+    const obsArr = DB.incidencias.filter(function(i){
+      return i.noEmp === p.noEmp && i.observacion && dias.some(function(d){ return d.fecha === i.fecha; });
+    });
+    const obs = obsArr.length ? obsArr[obsArr.length-1].observacion : '';
+
+    html += '<tr class="'+rowCls+'">';
+    html += '<td class="td-left"><span class="td-emp">'+p.noEmp+'</span>'
+      + (tieneAlertaM?'<span class="alerta-badge ab-m">M×'+alerts.find(function(a){return a.tipo==='M';}).valor+'</span>':'')
+      + (tieneAlertaPs?'<span class="alerta-badge ab-ps">Ps×'+alerts.find(function(a){return a.tipo==='Ps';}).valor+'</span>':'')
+      +'</td>';
+    html += '<td class="td-left"><span class="td-nombre">'+p.nombre+'</span></td>';
+    html += '<td class="td-left"><span class="td-puesto">'+p.puesto+'</span></td>';
+    html += '<td class="td-left"><span class="td-ingreso">'+p.fechaIngreso+'</span></td>';
+
+    dias.forEach(function(d){
+      const incObj = DB.incidencias.find(function(i){ return i.noEmp===p.noEmp && i.fecha===d.fecha; });
+      const inc = incObj ? incObj.incidencia : '';
+      const cls = inc ? clsInc(inc) : (esSabado(d.fecha)||esDomingo(d.fecha)?'ic-DIA':'ic-vacio');
+      const lbl = inc || (esSabado(d.fecha)||esDomingo(d.fecha)?'':'');
+      html += cellInc(p.noEmp, d.fecha, turno, cls, inc);
+    });
+
+    // Observaciones
+    const obsId = 'obs-'+p.noEmp+'-'+turno;
+    html += '<td class="td-left"><span class="td-obs" title="'+obs+'">'+obs+'</span></td>';
+    html += '<td><button class="btn btn-ghost" style="font-size:11px;padding:4px 8px" onclick="requirePin(function(){editarPersonal(\''+p.noEmp+'\')})">✏</button></td>';
+    html += '</tr>';
+  });
+
+  // ── SECCIÓN PASANTES ──
+  if(pasantes.length){
+    html += '<div style="background:var(--az3);padding:6px 16px;font-size:11px;font-weight:700;color:var(--az2);border-top:2px solid var(--az4);letter-spacing:.4px;text-transform:uppercase">🎓 Pasantes ('+pasantes.length+')</div>';
+    pasantes.forEach(function(p){
+      const alerts = empConAlerta[p.noEmp] || [];
+      const tieneAlertaM = alerts.some(function(a){ return a.tipo==='M'; });
+      const tieneAlertaPs = alerts.some(function(a){ return a.tipo==='Ps'; });
+      const rowCls = tieneAlertaPs ? ' alerta-ps' : (tieneAlertaM ? ' alerta-row' : '');
+      const obsArr = DB.incidencias.filter(function(i){
+        return i.noEmp===p.noEmp && i.observacion && dias.some(function(d){ return d.fecha===i.fecha; });
+      });
+      const obs = obsArr.length ? obsArr[obsArr.length-1].observacion : '';
+      html += '<tr class="'+rowCls+'" style="background:var(--az3)20">';
+      html += '<td class="td-left"><span class="td-emp">'+p.noEmp+'</span></td>';
+      html += '<td class="td-left"><span class="td-nombre" style="color:var(--az2)">🎓 '+p.nombre+'</span>'
+        +(p.finRotacion?'<br><span style="font-size:10px;color:var(--txt3)">Hasta: '+p.finRotacion+'</span>':'')+'</td>';
+      html += '<td class="td-left"><span class="td-puesto">'+p.puesto+'</span></td>';
+      html += '<td class="td-left"><span class="td-ingreso">'+p.fechaIngreso+'</span></td>';
+      dias.forEach(function(d){
+        const incObj = DB.incidencias.find(function(i){ return i.noEmp===p.noEmp && i.fecha===d.fecha; });
+        const inc = incObj ? incObj.incidencia : '';
+        const cls = inc ? clsInc(inc) : (esSabado(d.fecha)||esDomingo(d.fecha)?'ic-DIA':'ic-vacio');
+                html += cellInc(p.noEmp, d.fecha, turno, cls, inc);
+      });
+      html += '<td class="td-left"><span class="td-obs" title="'+obs+'">'+obs+'</span></td>';
+      html += '<td><button class="btn btn-ghost" style="font-size:11px;padding:4px 8px" data-emp="'+p.noEmp+'" onclick="requirePin(function(){editarPersonal(this.getAttribute(\"data-emp\"))})">✏</button></td>';
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table></div></div>';
+  container.innerHTML = html;
+}
+
+// ════════════════════════════════════════
+// PICKER INCIDENCIA
+// ════════════════════════════════════════
+function abrirPickerIncidencia(noEmp, fecha, turno){
+  const persona = DB.personal.find(function(p){ return p.noEmp===noEmp; });
+  const incActual = DB.incidencias.find(function(i){ return i.noEmp===noEmp && i.fecha===fecha; });
+  const incVal = incActual ? incActual.incidencia : '';
+  const obsVal = incActual ? (incActual.observacion||'') : '';
+
+  document.getElementById('modal-title').textContent = (persona?persona.nombre:'') + ' — ' + fecha;
+
+  let html = '<div style="margin-bottom:10px"><div class="form-label">Selecciona incidencia</div>';
+  html += '<div class="inc-picker">';
+  INCIDENCIAS.forEach(function(i){
+    const sel = incVal===i.c ? ' selected' : '';
+    html += '<div class="inc-pick-btn '+i.cls+sel+'" onclick="seleccionarInc(this,\''+i.c+'\')" data-code="'+i.c+'">'+i.c+'<br><span style="font-size:8px;font-weight:400">'+i.l+'</span></div>';
+  });
+  html += '</div>';
+  html += '<button class="inc-pick-vaciar" onclick="seleccionarInc(null,\'\')">✕ Vaciar celda</button>';
+  html += '</div>';
+  html += '<div class="form-row"><label class="form-label">Observación (opcional)</label>';
+  html += '<textarea id="obs-input" class="form-textarea" rows="2">'+obsVal+'</textarea></div>';
+
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal-footer').innerHTML =
+    '<button class="btn btn-ghost" onclick="cerrarModal(\'modal-main\')">Cancelar</button>'
+    +'<button class="btn btn-primary" onclick="guardarIncidencia(\''+noEmp+'\',\''+fecha+'\',\''+turno+'\')">Guardar</button>';
+
+  abrirModal('modal-main');
+  window._incSeleccionada = incVal;
+}
+
+function seleccionarInc(el, code){
+  document.querySelectorAll('.inc-pick-btn').forEach(function(b){ b.classList.remove('selected'); });
+  if(el) el.classList.add('selected');
+  window._incSeleccionada = code;
+}
+
+function guardarIncidencia(noEmp, fecha, turno){
+  const inc = window._incSeleccionada || '';
+  const obs = document.getElementById('obs-input').value.trim();
+
+  // Remover existente
+  DB.incidencias = DB.incidencias.filter(function(i){ return !(i.noEmp===noEmp && i.fecha===fecha); });
+
+  if(inc){
+    DB.incidencias.push({id: nid++, noEmp: noEmp, fecha: fecha, incidencia: inc, observacion: obs});
+  }
+
+  guardarLocal();
+  cerrarModal('modal-main');
+  renderTurno(turno);
+
+  // Sync GAS en background
+  if(GAS_CONFIGURADO) syncIncidencia(noEmp, fecha, inc, obs);
+}
+
+// ════════════════════════════════════════
+// MODAL PERSONAL
+// ════════════════════════════════════════
+function abrirModalPersonal(noEmpEditar, turnoDefault){
+  const p = noEmpEditar ? DB.personal.find(function(x){ return x.noEmp===noEmpEditar; }) : null;
+  document.getElementById('modal-title').textContent = p ? 'Editar empleado' : 'Nuevo empleado';
+
+  let turnosOpts = TURNOS_CAT.map(function(t){
+    const sel = (p?p.turno:turnoDefault)===t?' selected':'';
+    return '<option value="'+t+'"'+sel+'>'+TURNOS_LABEL[t]+'</option>';
+  }).join('');
+  const tipoPasante = p && p.tipo==='pasante';
+
+  document.getElementById('modal-body').innerHTML = `
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">No. Empleado *</label>
+        <input id="f-noemp" class="form-input" value="${p?p.noEmp:''}" placeholder="Ej. 46098" ${p?'readonly':''}>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Tipo *</label>
+        <select id="f-tipo" class="form-select">
+          <option value="base" ${!tipoPasante?'selected':''}>Personal de base</option>
+          <option value="pasante" ${tipoPasante?'selected':''}>Pasante</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Nombre completo *</label>
+      <input id="f-nombre" class="form-input" value="${p?p.nombre:''}" placeholder="APELLIDO APELLIDO Nombre">
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Turno *</label>
+        <select id="f-turno" class="form-select">${turnosOpts}</select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Puesto / Área rotación</label>
+        <input id="f-puesto" class="form-input" value="${p?p.puesto:''}" placeholder="Enfermera, UCI...">
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Fecha ingreso / Inicio rotación</label>
+        <input id="f-ingreso" class="form-input" value="${p?p.fechaIngreso:''}" placeholder="DD.MM.AA">
+      </div>
+      <div class="form-row" id="f-fin-row" style="${tipoPasante?'':'opacity:.4'}">
+        <label class="form-label">Fin de rotación (pasante)</label>
+        <input id="f-fin" class="form-input" value="${p&&p.finRotacion?p.finRotacion:''}" placeholder="DD.MM.AA">
+      </div>
+    </div>`;
+  document.getElementById('f-tipo').onchange=function(){
+    const esPas = this.value==='pasante';
+    document.getElementById('f-fin-row').style.opacity = esPas?'1':'0.4';
+  };
+
+  const footer = '<button class="btn btn-ghost" onclick="cerrarModal(\'modal-main\')">Cancelar</button>'
+    + (p?'<button class="btn btn-danger" onclick="eliminarPersonal(\''+noEmpEditar+'\')">Eliminar</button>':'')
+    + '<button class="btn btn-primary" onclick="guardarPersonal('+(p?'\''+noEmpEditar+'\'':'null')+')">Guardar</button>';
+  document.getElementById('modal-footer').innerHTML = footer;
+  abrirModal('modal-main');
+}
+
+function guardarPersonal(noEmpEditar){
+  const noEmp = document.getElementById('f-noemp').value.trim();
+  const nombre = document.getElementById('f-nombre').value.trim();
+  const turno = document.getElementById('f-turno').value;
+  const puesto = document.getElementById('f-puesto').value.trim();
+  const fechaIngreso = document.getElementById('f-ingreso').value.trim();
+
+  if(!noEmp||!nombre){ toast('Completa los campos obligatorios'); return; }
+
+  const tipo = document.getElementById('f-tipo').value;
+  const finRotacion = document.getElementById('f-fin').value.trim();
+  if(noEmpEditar){
+    const idx = DB.personal.findIndex(function(p){ return p.noEmp===noEmpEditar; });
+    if(idx>=0) DB.personal[idx] = {id:DB.personal[idx].id, noEmp, nombre, turno, puesto, fechaIngreso, tipo, finRotacion};
+  } else {
+    if(DB.personal.find(function(p){ return p.noEmp===noEmp; })){ toast('⚠ Ya existe ese No. de empleado'); return; }
+    DB.personal.push({id:nid++, noEmp, nombre, turno, puesto, fechaIngreso, tipo:tipo||'base', finRotacion});
+  }
+  guardarLocal();
+  cerrarModal('modal-main');
+  toast('✓ Empleado guardado');
+  renderPagina(paginaActual);
+  if(GAS_CONFIGURADO) syncPersonal();
+}
+
+function editarPersonal(noEmp){ abrirModalPersonal(noEmp, null); }
+
+function eliminarPersonal(noEmp){
+  if(!confirm('¿Eliminar este empleado y todas sus incidencias?')) return;
+  DB.personal = DB.personal.filter(function(p){ return p.noEmp!==noEmp; });
+  DB.incidencias = DB.incidencias.filter(function(i){ return i.noEmp!==noEmp; });
+  guardarLocal();
+  cerrarModal('modal-main');
+  toast('Empleado eliminado');
+  renderPagina(paginaActual);
+}
+
+// ════════════════════════════════════════
+// EVENTUAL
+// ════════════════════════════════════════
+function abrirModalEventual(ev){
+  document.getElementById('modal-title').textContent = ev ? 'Editar eventual' : 'Registrar personal eventual';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="form-row">
+      <label class="form-label">Nombre del trabajador eventual *</label>
+      <input id="ev-nombre" class="form-input" value="${ev?ev.nombre:''}" placeholder="Nombre completo">
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Fecha *</label>
+        <input id="ev-fecha" type="date" class="form-input" value="${ev?ev.fecha:''}">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Área</label>
+        <input id="ev-area" class="form-input" value="${ev?ev.area:''}" placeholder="UCI/UCIM, CEYE...">
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Incidencia cubierta</label>
+      <input id="ev-inc" class="form-input" value="${ev?ev.incidenciaCubierta:''}" placeholder="Ej. Incapacidad María Paola...">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Observaciones</label>
+      <textarea id="ev-obs" class="form-textarea">${ev?ev.observacion:''}</textarea>
+    </div>`;
+  document.getElementById('modal-footer').innerHTML =
+    '<button class="btn btn-ghost" onclick="cerrarModal(\'modal-main\')">Cancelar</button>'
+    +(ev?'<button class="btn btn-danger" onclick="eliminarEventual('+ev.id+')">Eliminar</button>':'')
+    +'<button class="btn btn-primary" onclick="guardarEventual('+(ev?ev.id:'null')+')">Guardar</button>';
+  abrirModal('modal-main');
+}
+
+function guardarEventual(idEditar){
+  const nombre = document.getElementById('ev-nombre').value.trim();
+  const fecha = document.getElementById('ev-fecha').value;
+  const area = document.getElementById('ev-area').value.trim();
+  const incidenciaCubierta = document.getElementById('ev-inc').value.trim();
+  const observacion = document.getElementById('ev-obs').value.trim();
+  if(!nombre||!fecha){ toast('Completa nombre y fecha'); return; }
+  if(idEditar && idEditar!=='null'){
+    const idx = DB.eventual.findIndex(function(e){ return e.id===Number(idEditar); });
+    if(idx>=0) DB.eventual[idx] = {id:Number(idEditar), nombre, fecha, area, incidenciaCubierta, observacion};
+  } else {
+    DB.eventual.push({id:nid++, nombre, fecha, area, incidenciaCubierta, observacion});
+  }
+  guardarLocal();
+  cerrarModal('modal-main');
+  toast('✓ Eventual guardado');
+  renderEventual();
+  if(GAS_CONFIGURADO) syncEventual();
+}
+
+function eliminarEventual(id){
+  if(!confirm('¿Eliminar este registro?')) return;
+  DB.eventual = DB.eventual.filter(function(e){ return e.id!==id; });
+  guardarLocal();
+  cerrarModal('modal-main');
+  renderEventual();
+}
+
+function renderEventual(){
+  const {mes, anio, q} = quincenaActual;
+  const dias = diasDelPeriodo(mes, anio, q);
+  const fechas = dias.map(function(d){ return d.fecha; });
+  const eventuales = DB.eventual.filter(function(e){ return fechas.includes(e.fecha); })
+    .sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+
+  document.getElementById('eventual-count').textContent = eventuales.length + ' registros';
+  const tbody = document.getElementById('eventual-tbody');
+  if(!eventuales.length){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Sin personal eventual en este período</td></tr>';
+    return;
+  }
+  tbody.innerHTML = eventuales.map(function(e){
+    return '<tr>'
+      +'<td style="font-weight:600">'+e.nombre+'</td>'
+      +'<td>'+e.fecha+'</td>'
+      +'<td>'+e.area+'</td>'
+      +'<td>'+e.incidenciaCubierta+'</td>'
+      +'<td style="color:var(--txt3);font-size:11px">'+e.observacion+'</td>'
+      +'<td><button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="requirePin(function(){abrirModalEventual(DB.eventual.find(function(x){return x.id==='+e.id+';}))})">✏</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+// ════════════════════════════════════════
+// PERSONAL CATÁLOGO
+// ════════════════════════════════════════
+function filtrarPersonal(turno, btn){
+  filtroPersonal = turno;
+  document.querySelectorAll('.filter-chip').forEach(function(c){ c.classList.remove('active'); });
+  if(btn) btn.classList.add('active');
+  renderPersonal();
+}
+
+function renderPersonal(){
+  const lista = DB.personal.filter(function(p){ return !filtroPersonal || p.turno===filtroPersonal; })
+    .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
+  const tbody = document.getElementById('personal-tbody');
+  if(!lista.length){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Sin personal registrado</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(function(p){
+    return '<tr>'
+      +'<td class="td-left"><span class="td-emp">'+p.noEmp+'</span></td>'
+      +'<td class="td-left"><span class="td-nombre">'+p.nombre+'</span></td>'
+      +'<td class="td-left"><span class="td-puesto">'+p.puesto+'</span></td>'
+      +'<td class="td-left"><span class="turno-badge">'+TURNOS_LABEL[p.turno]+'</span></td>'
+      +'<td class="td-left"><span class="td-ingreso">'+p.fechaIngreso+'</span></td>'
+      +'<td><button class="btn btn-ghost" style="font-size:11px;padding:4px 8px" onclick="requirePin(function(){editarPersonal(\''+p.noEmp+'\')})">✏</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+// ════════════════════════════════════════
+// CONCENTRADO
+// ════════════════════════════════════════
+function renderConcentrado(){
+  const mes = parseInt(document.getElementById('conc-mes').value);
+  const anio = parseInt(document.getElementById('conc-anio').value);
+  const filtroTurno = document.getElementById('conc-turno').value;
+
+  if(!DB.personal.length){
+    document.getElementById('concentrado-body').innerHTML = '<div class="empty-msg">Sin datos. Presiona Sync para cargar.</div>';
+    return;
+  }
+
+  // Calcular alertas del mes
+  const alertasTodas = [];
+  TURNOS.forEach(function(t){
+    if(filtroTurno && filtroTurno!==t) return;
+    alertasTodas.push(...calcularAlertas(t, mes, anio));
+  });
+  const alertasEl = document.getElementById('concentrado-alertas');
+  if(alertasTodas.length){
+    alertasEl.innerHTML = '<div class="alertas-panel"><div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">⚠️ Alertas del mes de '+MESES[mes]+'</div>'
+      + alertasTodas.map(function(a){
+        const cls = a.tipo==='Ps'?'nivel-ps':'nivel-m';
+        return '<div class="alerta-item '+cls+'"><span class="alerta-icon">'+(a.tipo==='Ps'?'🚨':'⚠️')+'</span>'
+          +'<div class="alerta-txt"><div class="alerta-nombre">'+a.nombre+'</div>'
+          +'<div class="alerta-desc">'+a.msg+'</div></div></div>';
+      }).join('') + '</div>';
+  } else { alertasEl.innerHTML=''; }
+
+  const personal = DB.personal.filter(function(p){ return !filtroTurno||p.turno===filtroTurno; })
+    .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
+
+  // Tipos a contar (excluyendo A)
+  const tiposContar = ['F','R','I','V','M','B','FJ','FE','DT','Ps','Pe','LC','L','O','DV','BC/S','F4H','F8H'];
+
+  let html = '<div class="turno-card"><div class="inc-table-wrap"><table class="inc-table">';
+  html += '<thead><tr>';
+  html += '<th class="th-left">No. Emp</th><th class="th-left" style="min-width:160px">Nombre</th>';
+  html += '<th class="th-left">Turno</th>';
+  tiposContar.forEach(function(t){ html += '<th title="'+t+'">'+t+'</th>'; });
+  html += '<th>Total inc.</th></tr></thead><tbody>';
+
+  personal.forEach(function(p){
+    const incMes = DB.incidencias.filter(function(i){
+      const d = new Date(i.fecha+'T12:00:00');
+      return i.noEmp===p.noEmp && d.getMonth()===mes && d.getFullYear()===anio;
+    });
+    const conteo = {};
+    tiposContar.forEach(function(t){ conteo[t]=0; });
+    incMes.forEach(function(i){ if(conteo[i.incidencia]!==undefined) conteo[i.incidencia]++; });
+    const total = Object.values(conteo).reduce(function(s,v){ return s+v; },0);
+
+    const tieneAlM = conteo['M'] >= 4;
+    const tieneAlPs = conteo['Ps'] >= 2;
+    const rowCls = tieneAlPs?'alerta-ps':tieneAlM?'alerta-row':'';
+
+    html += '<tr class="'+rowCls+'">';
+    html += '<td class="td-left"><span class="td-emp">'+p.noEmp+'</span></td>';
+    html += '<td class="td-left"><span class="td-nombre">'+p.nombre+'</span></td>';
+    html += '<td class="td-left"><span class="turno-badge">'+TURNOS_LABEL[p.turno]+'</span></td>';
+    tiposContar.forEach(function(t){
+      const v = conteo[t];
+      let style = v>0?'font-weight:700;':'color:var(--txt3);';
+      if(t==='M'&&v>=4) style='font-weight:700;color:var(--naranja);';
+      if(t==='Ps'&&v>=2) style='font-weight:700;color:var(--rojo);';
+      html += '<td style="text-align:center;'+style+'">'+(v||'–')+'</td>';
+    });
+    html += '<td style="text-align:center;font-weight:700;color:var(--az)">'+total+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+  document.getElementById('concentrado-body').innerHTML = html;
+}
+
+// ════════════════════════════════════════
+// EXPORT CSV
+// ════════════════════════════════════════
+function exportarCSV(turno){
+  const {mes, anio, q} = quincenaActual;
+  const personal = DB.personal.filter(function(p){ return p.turno===turno; });
+  const dias = diasDelPeriodo(mes, anio, q);
+  let csv = 'No.Empleado,Nombre,Puesto,F.Ingreso,'+dias.map(function(d){ return d.dia+'/'+String(d.mes+1).padStart(2,'0'); }).join(',')+',Observaciones\n';
+  personal.forEach(function(p){
+    const row = [p.noEmp, '"'+p.nombre+'"', '"'+p.puesto+'"', p.fechaIngreso];
+    const obsArr = [];
+    dias.forEach(function(d){
+      const i = DB.incidencias.find(function(x){ return x.noEmp===p.noEmp && x.fecha===d.fecha; });
+      row.push(i?i.incidencia:'');
+      if(i&&i.observacion) obsArr.push(i.observacion);
+    });
+    row.push('"'+obsArr.join('; ')+'"');
+    csv += row.join(',') + '\n';
+  });
+  descargarCSV(csv, TURNOS_LABEL[turno]+'_Q'+q+'_'+mesAnioLabel(mes,anio));
+}
+
+function exportarCSVEventual(){
+  const {mes, anio, q} = quincenaActual;
+  const dias = diasDelPeriodo(mes, anio, q);
+  const fechas = dias.map(function(d){ return d.fecha; });
+  const lista = DB.eventual.filter(function(e){ return fechas.includes(e.fecha); });
+  let csv = 'Nombre,Fecha,Area,IncidenciaCubierta,Observaciones\n';
+  lista.forEach(function(e){ csv += ['"'+e.nombre+'"',e.fecha,'"'+e.area+'"','"'+e.incidenciaCubierta+'"','"'+e.observacion+'"'].join(',')+'\n'; });
+  descargarCSV(csv, 'Eventual_Q'+q+'_'+mesAnioLabel(mes,anio));
+}
+
+function exportarCSVConcentrado(){
+  const mes = parseInt(document.getElementById('conc-mes').value);
+  const anio = parseInt(document.getElementById('conc-anio').value);
+  const filtroTurno = document.getElementById('conc-turno').value;
+  const personal = DB.personal.filter(function(p){ return !filtroTurno||p.turno===filtroTurno; });
+  const tiposContar = ['F','R','I','V','M','B','FJ','FE','DT','Ps','Pe','LC','L','O','DV','BC/S','F4H','F8H'];
+  let csv = 'No.Emp,Nombre,Turno,'+tiposContar.join(',')+',Total\n';
+  personal.forEach(function(p){
+    const incMes = DB.incidencias.filter(function(i){
+      const d = new Date(i.fecha+'T12:00:00');
+      return i.noEmp===p.noEmp && d.getMonth()===mes && d.getFullYear()===anio;
+    });
+    const conteo = {}; tiposContar.forEach(function(t){ conteo[t]=0; });
+    incMes.forEach(function(i){ if(conteo[i.incidencia]!==undefined) conteo[i.incidencia]++; });
+    const total = Object.values(conteo).reduce(function(s,v){ return s+v; },0);
+    csv += [p.noEmp,'"'+p.nombre+'"',TURNOS_LABEL[p.turno],...tiposContar.map(function(t){ return conteo[t]; }),total].join(',')+'\n';
+  });
+  descargarCSV(csv, 'Concentrado_'+mesAnioLabel(mes,anio));
+}
+
+function descargarCSV(csv, nombre){
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=nombre+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ════════════════════════════════════════
+// LOCAL STORAGE
+// ════════════════════════════════════════
+function guardarLocal(){
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({db:DB, nid})); }catch(e){}
+}
+function cargarLocal(){
+  try{
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(!raw) return false;
+    const p = JSON.parse(raw);
+    if(p.db) DB = p.db;
+    if(p.nid) nid = p.nid;
+    return true;
+  }catch(e){ return false; }
+}
+function recalcNid(){
+  let max = 0;
+  ['personal','incidencias','eventual','textra'].forEach(function(k){
+    (DB[k]||[]).forEach(function(r){ if(r.id>max) max=r.id; });
+  });
+  nid = max + 1;
+}
+
+// ════════════════════════════════════════
+// GAS SYNC
+// ════════════════════════════════════════
+async function syncGAS(){
+  if(!GAS_CONFIGURADO){ toast('⚠ GAS no configurado'); return; }
+  showLoader('🔄 Sincronizando con Google Sheets…');
+  try{
+    const r = await fetch(GAS_URL+'?action=getAll');
+    const data = await r.json();
+    if(data && typeof data === 'object'){
+      if(Array.isArray(data.personal)) DB.personal = data.personal;
+      if(Array.isArray(data.incidencias)) DB.incidencias = data.incidencias;
+      if(Array.isArray(data.eventual)) DB.eventual = data.eventual;
+      if(Array.isArray(data.textra)) DB.textra = data.textra;
+      recalcNid();
+      guardarLocal();
+      toast('✓ Datos sincronizados');
+    }
+  }catch(e){ toast('⚠ Error al sincronizar'); }
+  hideLoader();
+  renderPagina(paginaActual);
+}
+
+async function syncPersonal(){
+  if(!GAS_CONFIGURADO) return;
+  try{
+    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'savePersonal', data:DB.personal})});
+  }catch(e){}
+}
+
+async function syncIncidencia(noEmp, fecha, inc, obs){
+  if(!GAS_CONFIGURADO) return;
+  try{
+    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'saveIncidencia', noEmp, fecha, incidencia:inc, observacion:obs})});
+  }catch(e){}
+}
+
+async function syncEventual(){
+  if(!GAS_CONFIGURADO) return;
+  try{
+    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'saveEventual', data:DB.eventual})});
+  }catch(e){}
+}
+
+async function syncTextra(){
+  if(!GAS_CONFIGURADO) return;
+  try{
+    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'saveTextra', data:DB.textra})});
+  }catch(e){}
+}
+
+// ════════════════════════════════════════
+// PIN
+// ════════════════════════════════════════
+function requirePin(cb){
+  if(pinOK){ cb(); return; }
+  pinCB = cb;
+  document.getElementById('pin-error').style.display='none';
+  document.getElementById('pinInput').value='';
+  abrirModal('modal-pin');
+  setTimeout(function(){ document.getElementById('pinInput').focus(); }, 100);
+}
+function abrirPin(){ pinOK=false; requirePin(function(){}); }
+function verificarPin(){
+  const val = document.getElementById('pinInput').value;
+  if(val === PIN_CORRECTO){
+    pinOK = true;
+    cerrarModal('modal-pin');
+    if(pinCB){ pinCB(); pinCB=null; }
+  } else {
+    document.getElementById('pin-error').style.display='block';
+  }
+}
+
+// ════════════════════════════════════════
+// UI HELPERS
+// ════════════════════════════════════════
+function abrirModal(id){ document.getElementById(id).classList.add('open'); }
+function cerrarModal(id){ document.getElementById(id).classList.remove('open'); }
+function showLoader(txt){ document.getElementById('loader-txt').textContent=txt||'Cargando...'; document.getElementById('loader').classList.add('open'); }
+function hideLoader(){ document.getElementById('loader').classList.remove('open'); }
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(function(){ el.classList.remove('show'); }, 3000);
+}
+
+// Click fuera del modal para cerrar
+document.querySelectorAll('.modal-overlay').forEach(function(o){
+  o.addEventListener('click', function(e){ if(e.target===o) cerrarModal(o.id); });
+});
+
+// ════════════════════════════════════════
+// TIEMPO EXTRA
+// ════════════════════════════════════════
+function abrirModalTextra(id){
+  const tx = id ? DB.textra.find(function(t){ return t.id===id; }) : null;
+
+  // Opciones de personal para el select
+  const pOpts = DB.personal
+    .filter(function(p){ return p.tipo!=='pasante' && p.turno!=='eventual'; })
+    .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); })
+    .map(function(p){
+      const sel = tx && tx.noEmp===p.noEmp ? ' selected' : '';
+      return '<option value="'+p.noEmp+'"'+sel+'>'+p.nombre+' ('+TURNOS_LABEL[p.turno]+')</option>';
+    }).join('');
+
+  document.getElementById('modal-title').textContent = tx ? 'Editar tiempo extra' : 'Registrar tiempo extra';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="form-row">
+      <label class="form-label">Empleado *</label>
+      <select id="tx-emp" class="form-select">
+        <option value="">— Selecciona —</option>
+        ${pOpts}
+      </select>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Fecha *</label>
+        <input id="tx-fecha" type="date" class="form-input" value="${tx?tx.fecha:''}">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Horas extra *</label>
+        <input id="tx-horas" type="number" min="0.5" max="24" step="0.5" class="form-input" value="${tx?tx.horas:''}" placeholder="Ej. 4">
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Motivo *</label>
+      <textarea id="tx-motivo" class="form-textarea" rows="2" placeholder="Guardia, urgencia, cobertura...">${tx?tx.motivo:''}</textarea>
+    </div>`;
+
+  const txFooter = document.getElementById('modal-footer');
+  txFooter.innerHTML = '';
+  const txBtnCan = document.createElement('button');
+  txBtnCan.className='btn btn-ghost'; txBtnCan.textContent='Cancelar';
+  txBtnCan.onclick = function(){ cerrarModal('modal-main'); };
+  txFooter.appendChild(txBtnCan);
+  if(tx){ const txBtnDel = document.createElement('button'); txBtnDel.className='btn btn-danger'; txBtnDel.textContent='Eliminar'; (function(xid){ txBtnDel.onclick=function(){ eliminarTextra(xid); }; })(tx.id); txFooter.appendChild(txBtnDel); }
+  const txBtnSave = document.createElement('button'); txBtnSave.className='btn btn-primary'; txBtnSave.textContent='Guardar';
+  (function(xid){ txBtnSave.onclick=function(){ guardarTextra(xid?String(xid):'null'); }; })(tx?tx.id:null);
+  txFooter.appendChild(txBtnSave);
+  abrirModal('modal-main');
+}
+
+function guardarTextra(idEditar){
+  const noEmp = document.getElementById('tx-emp').value;
+  const fecha = document.getElementById('tx-fecha').value;
+  const horas = parseFloat(document.getElementById('tx-horas').value);
+  const motivo = document.getElementById('tx-motivo').value.trim();
+  if(!noEmp||!fecha||!horas||!motivo){ toast('Completa todos los campos'); return; }
+  const persona = DB.personal.find(function(p){ return p.noEmp===noEmp; });
+  const nombre = persona ? persona.nombre : '';
+  const turno  = persona ? persona.turno : '';
+  if(idEditar && idEditar!=='null'){
+    const idx = DB.textra.findIndex(function(t){ return t.id===Number(idEditar); });
+    if(idx>=0) DB.textra[idx] = {id:Number(idEditar), noEmp, nombre, turno, fecha, horas, motivo};
+  } else {
+    DB.textra.push({id:nid++, noEmp, nombre, turno, fecha, horas, motivo});
+  }
+  guardarLocal();
+  cerrarModal('modal-main');
+  toast('✓ Tiempo extra guardado');
+  renderTextra();
+  if(GAS_CONFIGURADO) syncTextra();
+}
+
+function eliminarTextra(id){
+  if(!confirm('¿Eliminar este registro?')) return;
+  DB.textra = DB.textra.filter(function(t){ return t.id!==id; });
+  guardarLocal();
+  cerrarModal('modal-main');
+  renderTextra();
+  if(GAS_CONFIGURADO) syncTextra();
+}
+
+function renderTextra(){
+  const mes = parseInt(document.getElementById('textra-mes').value);
+  const anio = parseInt(document.getElementById('textra-anio').value);
+  const filtroTurno = document.getElementById('textra-turno').value;
+
+  const lista = DB.textra.filter(function(t){
+    const d = new Date(t.fecha+'T12:00:00');
+    const mismoMes = d.getMonth()===mes && d.getFullYear()===anio;
+    const mismoTurno = !filtroTurno || t.turno===filtroTurno;
+    return mismoMes && mismoTurno;
+  }).sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+
+  const totalHoras = lista.reduce(function(s,t){ return s+(parseFloat(t.horas)||0); }, 0);
+
+  document.getElementById('textra-count').textContent = lista.length+' registros';
+  document.getElementById('textra-total').textContent = totalHoras > 0 ? '⏱ '+totalHoras+' hrs total' : '';
+
+  const tbody = document.getElementById('textra-tbody');
+  if(!lista.length){
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-msg">Sin registros de tiempo extra en este período</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(function(t){
+    return '<tr>'
+      +'<td><span class="td-emp">'+t.noEmp+'</span></td>'
+      +'<td style="font-weight:600">'+t.nombre+'</td>'
+      +'<td><span class="turno-badge">'+TURNOS_LABEL[t.turno]+'</span></td>'
+      +'<td>'+t.fecha+'</td>'
+      +'<td style="text-align:center;font-weight:700;color:var(--az)">'+t.horas+' h</td>'
+      +'<td style="color:var(--txt2)">'+t.motivo+'</td>'
+      +'<td><button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="requirePin(function(){abrirModalTextra('+t.id+')})">✏</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+function exportarCSVTextra(){
+  const mes = parseInt(document.getElementById('textra-mes').value);
+  const anio = parseInt(document.getElementById('textra-anio').value);
+  const filtroTurno = document.getElementById('textra-turno').value;
+  const lista = DB.textra.filter(function(t){
+    const d = new Date(t.fecha+'T12:00:00');
+    return d.getMonth()===mes && d.getFullYear()===anio && (!filtroTurno||t.turno===filtroTurno);
+  });
+  let csv = 'No.Emp,Nombre,Turno,Fecha,Horas,Motivo\n';
+  lista.forEach(function(t){
+  csv += [t.noEmp, '"'+t.nombre+'"', TURNOS_LABEL[t.turno], t.fecha, t.horas, '"'+t.motivo+'"'].join(',')+'\n';
+
+  });
+  descargarCSV(csv, 'TiempoExtra_'+MESES[mes]+'_'+anio);
+}
+
+// ════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════
+async function init(){
+  const hayLocal = cargarLocal();
+  if(hayLocal){ recalcNid(); }
+  actualizarLabels();
+  renderPagina('tmat');
+  if(GAS_CONFIGURADO){
+    showLoader('🔄 Sincronizando…');
+    try{
+      const r = await fetch(GAS_URL+'?action=getAll');
+      const data = await r.json();
+      if(data && typeof data === 'object'){
+        if(Array.isArray(data.personal)) DB.personal = data.personal;
+        if(Array.isArray(data.incidencias)) DB.incidencias = data.incidencias;
+        if(Array.isArray(data.eventual)) DB.eventual = data.eventual;
+        recalcNid();
+        guardarLocal();
+      }
+    }catch(e){ console.error('GAS error:',e); }
+    hideLoader();
+    Promise.resolve().then(function(){ renderPagina('tmat'); });
+  }
+}
+
+init();
+</script>
+</body>
+</html>

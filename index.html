@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Incidencias Enfermería CMGA</title>
+<title>Incidencias CMGA</title>
 <style>
 :root{
   --bg:#F8FAFC;--bg2:#F1F5F9;--bg3:#E2E8F0;
@@ -199,7 +199,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 
 <!-- NAV -->
 <nav class="nav">
-  <span class="nav-brand"><span>📋</span>Incidencias Enfermería CMGA</span>
+  <span class="nav-brand"><span>📋</span>Incidencias CMGA</span>
   <button class="nav-tab active" onclick="showPage('tmat',this)">🌅 Matutino</button>
   <button class="nav-tab" onclick="showPage('vesp',this)">🌆 Vespertino</button>
   <button class="nav-tab" onclick="showPage('noct',this)">🌙 Nocturno</button>
@@ -434,13 +434,11 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   </div>
 </div>
 
+
 <!-- TIEMPO EXTRA -->
 <div class="page" id="page-textra">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-    <div>
-      <div class="sec-title">⏱ Tiempo Extra</div>
-      <div class="sec-sub">Registro de horas extra por persona</div>
-    </div>
+    <div><div class="sec-title">⏱ Tiempo Extra</div><div class="sec-sub">Registro de horas extra por persona</div></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary" onclick="requirePin(function(){ abrirModalTextra(null); })">+ Registrar tiempo extra</button>
       <button class="btn btn-ghost" onclick="exportarCSVTextra()">↓ CSV</button>
@@ -458,10 +456,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     </select>
     <select id="textra-turno" class="form-select" style="width:150px" onchange="renderTextra()">
       <option value="">Todos los turnos</option>
-      <option value="tmat">Matutino</option>
-      <option value="vesp">Vespertino</option>
-      <option value="noct">Nocturno</option>
-      <option value="sup">Supervisoras</option>
+      <option value="tmat">Matutino</option><option value="vesp">Vespertino</option>
+      <option value="noct">Nocturno</option><option value="sup">Supervisoras</option>
       <option value="ja">J. Acumulada</option>
     </select>
   </div>
@@ -473,9 +469,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     </div>
     <div class="inc-table-wrap">
       <table class="eventual-table">
-        <thead><tr>
-          <th>No. Emp</th><th>Nombre</th><th>Turno</th><th>Fecha</th><th style="text-align:center">Horas</th><th>Motivo</th><th></th>
-        </tr></thead>
+        <thead><tr><th>No. Emp</th><th>Nombre</th><th>Turno</th><th>Fecha</th><th style="text-align:center">Horas</th><th>Motivo</th><th></th></tr></thead>
         <tbody id="textra-tbody"><tr><td colspan="7" class="empty-msg">Sin registros</td></tr></tbody>
       </table>
     </div>
@@ -486,7 +480,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 // ════════════════════════════════════════
 // CONFIG
 // ════════════════════════════════════════
-const GAS_URL = 'TU_URL_GAS_AQUI'; // ← Pega aquí la URL del despliegue de Apps Script
+const GAS_URL = 'TU_URL_GAS_AQUI';
 const GAS_CONFIGURADO = GAS_URL !== 'TU_URL_GAS_AQUI';
 const PIN_CORRECTO = 'CMGA1';
 const CACHE_KEY = 'incidencias_db_v1';
@@ -520,13 +514,6 @@ const INCIDENCIAS = [
 const INC_MAP = {};
 INCIDENCIAS.forEach(function(i){ INC_MAP[i.c]=i; });
 
-function cellInc(noEmp, fecha, turno, cls, inc){
-  return '<td class="inc-cell '+cls+'" data-emp="'+noEmp+'" data-fecha="'+fecha+'" data-turno="'+turno+'" onclick="clickCell(this)" title="'+fecha+'">'+inc+'</td>';
-}
-function clickCell(el){
-  const noEmp=el.dataset.emp, fecha=el.dataset.fecha, turno=el.dataset.turno;
-  requirePin(function(){ abrirPickerIncidencia(noEmp, fecha, turno); });
-}
 function clsInc(c){
   if(!c) return 'ic-vacio';
   const norm = c.replace('/','').replace(' ','');
@@ -551,7 +538,7 @@ let filtroPersonal = '';
 
 // DB
 let DB = {
-  personal: [],   // {noEmp, nombre, fechaIngreso, puesto, turno, tipo, finRotacion, id}
+  personal: [],   // {noEmp, nombre, fechaIngreso, puesto, turno, id}
   incidencias: [], // {noEmp, fecha:'YYYY-MM-DD', incidencia, observacion, id}
   eventual: [],   // {nombre, fecha:'YYYY-MM-DD', area, incidenciaCubierta, observacion, id}
   textra: []      // {noEmp, nombre, turno, fecha, horas, motivo, id}
@@ -704,36 +691,93 @@ function renderAlertas(turno){
 function renderTurno(turno){
   renderAlertas(turno);
   const {mes, anio, q} = quincenaActual;
-  const personalTodo = DB.personal.filter(function(p){ return p.turno === turno; })
-    .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
-  const personal = personalTodo.filter(function(p){ return p.tipo !== 'pasante'; });
-  const pasantes = personalTodo.filter(function(p){ return p.tipo === 'pasante'; });
+  const todos = DB.personal.filter(function(p){ return p.turno===turno; })
+                            .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
+  const personal = todos.filter(function(p){ return p.tipo!=='pasante'; });
+  const pasantes = todos.filter(function(p){ return p.tipo==='pasante'; });
   const dias = diasDelPeriodo(mes, anio, q);
-  const hoy = fechaStr(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
   const alertasMes = calcularAlertas(turno, mes, anio);
-  const empConAlerta = {};
-  alertasMes.forEach(function(a){ empConAlerta[a.noEmp] = empConAlerta[a.noEmp]||[]; empConAlerta[a.noEmp].push(a); });
+  const porEmp = {};
+  alertasMes.forEach(function(a){
+    if(!porEmp[a.noEmp]) porEmp[a.noEmp]=[];
+    porEmp[a.noEmp].push(a);
+  });
 
-  const container = document.getElementById('tabla-'+turno);
-  if(!personal.length && !pasantes.length){
-    container.innerHTML = '<div class="turno-card"><div class="empty-msg">No hay personal en este turno. <button class="btn btn-primary" style="margin-left:8px" onclick="requirePin(function(){abrirModalPersonal(null,\''+turno+'\')})">+ Agregar</button></div></div>';
+  const wrap = document.getElementById('tabla-'+turno);
+  wrap.innerHTML = '';
+
+  if(!todos.length){
+    wrap.innerHTML = '<div class="turno-card"><div class="empty-msg">Sin personal en este turno. '
+      +'<button class="btn btn-primary" style="margin-left:8px" '
+      +'onclick="requirePin(function(){abrirModalPersonal(null,\''+turno+'\')})">+ Agregar</button></div></div>';
     return;
   }
 
-  // Construir encabezados de días
+  // Construir HTML de encabezados de días
   let thDias = '';
   dias.forEach(function(d){
     const dow = dowLetra(d.fecha);
-    const esFin = dow === 'D' || dow === 'S';
-    thDias += '<th class="th-dia'+(esFin?' dow-d':'')+'" style="min-width:32px;width:32px"><div class="th-dia-label">'+d.dia+'</div><div class="th-dia-dow">'+dow+'</div></th>';
+    const fin = dow==='D'||dow==='S';
+    thDias += '<th class="th-dia'+(fin?' dow-d':'')+'" style="min-width:32px;width:32px">'
+             +'<div class="th-dia-label">'+d.dia+'</div>'
+             +'<div class="th-dia-dow">'+dow+'</div></th>';
   });
 
-  // Crear estructura base de la tabla
-  const card = document.createElement('div');
-  card.className = 'turno-card';
-  card.innerHTML = '<div class="turno-header">'
+  // Construir filas HTML de cada persona
+  function filaHTML(p, esPasante){
+    const al = porEmp[p.noEmp]||[];
+    const tM  = al.some(function(a){ return a.tipo==='M'; });
+    const tPs = al.some(function(a){ return a.tipo==='Ps'; });
+    const rowCls = tPs?'alerta-ps':(tM?'alerta-row':'');
+    const bgRow  = esPasante?'background:rgba(99,102,241,.04);':'';
+    const obsArr = DB.incidencias.filter(function(i){
+      return i.noEmp===p.noEmp && i.observacion && dias.some(function(d){ return d.fecha===i.fecha; });
+    });
+    const obs = obsArr.length ? obsArr[obsArr.length-1].observacion : '';
+    const badgeM  = tM  ? '<span class="alerta-badge ab-m">M×'+al.find(function(a){return a.tipo==='M';}).valor+'</span>' : '';
+    const badgePs = tPs ? '<span class="alerta-badge ab-ps">Ps×'+al.find(function(a){return a.tipo==='Ps';}).valor+'</span>' : '';
+    const nomHtml = (esPasante?'🎓 ':'')+p.nombre
+      +(esPasante&&p.finRotacion?'<br><small style="color:var(--txt3)">Hasta: '+p.finRotacion+'</small>':'');
+
+    let celdas = '';
+    dias.forEach(function(d){
+      const incObj = DB.incidencias.find(function(i){ return i.noEmp===p.noEmp&&i.fecha===d.fecha; });
+      const inc = incObj ? incObj.incidencia : '';
+      const dow = dowLetra(d.fecha);
+      const fin = dow==='D'||dow==='S';
+      const cls = inc ? clsInc(inc) : (fin?'ic-DIA':'ic-vacio');
+      celdas += '<td class="inc-cell '+cls+'" data-emp="'+p.noEmp
+               +'" data-fecha="'+d.fecha+'" data-turno="'+turno
+               +'" onclick="clickCell(this)" title="'+d.fecha+'">'+(inc||'')+'</td>';
+    });
+
+    return '<tr class="'+rowCls+'" style="'+bgRow+'" data-row-emp="'+p.noEmp+'">'
+      +'<td class="td-left"><span class="td-emp">'+p.noEmp+'</span>'+badgeM+badgePs+'</td>'
+      +'<td class="td-left"><span class="td-nombre"'+(esPasante?' style="color:var(--az2)"':'')+'>'+nomHtml+'</span></td>'
+      +'<td class="td-left"><span class="td-puesto">'+p.puesto+'</span></td>'
+      +'<td class="td-left"><span class="td-ingreso">'+p.fechaIngreso+'</span></td>'
+      +celdas
+      +'<td class="td-left td-obs" title="'+obs+'">'+obs+'</td>'
+      +'<td class="td-btn-edit" data-emp="'+p.noEmp+'"></td>'
+      +'</tr>';
+  }
+
+  let rowsHTML = '';
+  personal.forEach(function(p){ rowsHTML += filaHTML(p, false); });
+
+  if(pasantes.length){
+    rowsHTML += '<tr><td colspan="'+(4+dias.length+2)+'" '
+      +'style="background:var(--az3);padding:6px 16px;font-size:11px;font-weight:700;'
+      +'color:var(--az2);border-top:2px solid var(--az4)">🎓 Pasantes ('+pasantes.length+')</td></tr>';
+    pasantes.forEach(function(p){ rowsHTML += filaHTML(p, true); });
+  }
+
+  wrap.innerHTML =
+    '<div class="turno-card">'
+    +'<div class="turno-header">'
     +'<span class="turno-title">'+TURNOS_ICON[turno]+' '+TURNOS_LABEL[turno]+'</span>'
-    +'<span class="turno-count" style="margin-left:auto;margin-right:12px">'+personal.length+' personas'+(pasantes.length?' · '+pasantes.length+' pasantes':'')+'</span>'
+    +'<span class="turno-count" style="margin-left:auto;margin-right:12px">'
+    +personal.length+' personas'+(pasantes.length?' · '+pasantes.length+' pasantes':'')+'</span>'
     +'</div>'
     +'<div class="inc-table-wrap"><table class="inc-table"><thead><tr>'
     +'<th class="th-left" style="min-width:70px">No. Emp</th>'
@@ -743,103 +787,16 @@ function renderTurno(turno){
     +thDias
     +'<th style="min-width:120px">Observaciones</th>'
     +'<th style="min-width:40px"></th>'
-    +'</tr></thead><tbody id="tbody-'+turno+'"></tbody></table></div>';
+    +'</tr></thead><tbody>'+rowsHTML+'</tbody></table></div></div>';
 
-  container.innerHTML = '';
-  container.appendChild(card);
-  const tbody = card.querySelector('tbody');
-
-  // Función para crear una fila de persona
-  function crearFila(p, esPasante){
-    const alerts = empConAlerta[p.noEmp] || [];
-    const tieneAlertaM  = alerts.some(function(a){ return a.tipo==='M'; });
-    const tieneAlertaPs = alerts.some(function(a){ return a.tipo==='Ps'; });
-    const obsArr = DB.incidencias.filter(function(i){
-      return i.noEmp===p.noEmp && i.observacion && dias.some(function(d){ return d.fecha===i.fecha; });
-    });
-    const obs = obsArr.length ? obsArr[obsArr.length-1].observacion : '';
-
-    const tr = document.createElement('tr');
-    if(tieneAlertaPs) tr.classList.add('alerta-ps');
-    else if(tieneAlertaM) tr.classList.add('alerta-row');
-    if(esPasante) tr.style.background = 'rgba(99,102,241,0.04)';
-
-    // Celda No. Emp
-    const tdEmp = document.createElement('td');
-    tdEmp.className = 'td-left';
-    tdEmp.innerHTML = '<span class="td-emp">'+p.noEmp+'</span>'
-      +(tieneAlertaM?'<span class="alerta-badge ab-m">M×'+alerts.find(function(a){return a.tipo==='M';}).valor+'</span>':'')
-      +(tieneAlertaPs?'<span class="alerta-badge ab-ps">Ps×'+alerts.find(function(a){return a.tipo==='Ps';}).valor+'</span>':'');
-    tr.appendChild(tdEmp);
-
-    // Celda Nombre
-    const tdNombre = document.createElement('td');
-    tdNombre.className = 'td-left';
-    tdNombre.innerHTML = '<span class="td-nombre"'+(esPasante?' style="color:var(--az2)"':'')+'>'+
-      (esPasante?'🎓 ':'')+p.nombre+'</span>'
-      +(esPasante&&p.finRotacion?'<br><span style="font-size:10px;color:var(--txt3)">Hasta: '+p.finRotacion+'</span>':'');
-    tr.appendChild(tdNombre);
-
-    // Celda Puesto
-    const tdPuesto = document.createElement('td');
-    tdPuesto.className = 'td-left';
-    tdPuesto.innerHTML = '<span class="td-puesto">'+p.puesto+'</span>';
-    tr.appendChild(tdPuesto);
-
-    // Celda F. Ingreso
-    const tdIngreso = document.createElement('td');
-    tdIngreso.className = 'td-left';
-    tdIngreso.innerHTML = '<span class="td-ingreso">'+p.fechaIngreso+'</span>';
-    tr.appendChild(tdIngreso);
-
-    // Celdas de días
-    dias.forEach(function(d){
-      const incObj = DB.incidencias.find(function(i){ return i.noEmp===p.noEmp && i.fecha===d.fecha; });
-      const inc = incObj ? incObj.incidencia : '';
-      const dow = dowLetra(d.fecha);
-      const esFin = dow==='D'||dow==='S';
-      const cls = inc ? clsInc(inc) : (esFin ? 'ic-DIA' : 'ic-vacio');
-      const td = document.createElement('td');
-      td.className = 'inc-cell ' + cls;
-      td.title = d.fecha;
-      td.textContent = inc || (esFin ? '·' : '');
-      (function(emp, fecha){ td.onclick = function(){ requirePin(function(){ abrirPickerIncidencia(emp, fecha, turno); }); }; })(p.noEmp, d.fecha);
-      tr.appendChild(td);
-    });
-
-    // Celda Observaciones
-    const tdObs = document.createElement('td');
-    tdObs.className = 'td-left';
-    tdObs.innerHTML = '<span class="td-obs" title="'+obs+'">'+obs+'</span>';
-    tr.appendChild(tdObs);
-
-    // Celda botón editar
-    const tdBtn = document.createElement('td');
+  // Asignar botones de editar con closures limpias
+  wrap.querySelectorAll('td.td-btn-edit').forEach(function(td){
+    const emp = td.dataset.emp;
     const btn = document.createElement('button');
-    btn.className = 'btn btn-ghost';
-    btn.style.cssText = 'font-size:11px;padding:4px 8px';
-    btn.textContent = '✏';
-    (function(emp){ btn.onclick = function(){ requirePin(function(){ editarPersonal(emp); }); }; })(p.noEmp);
-    tdBtn.appendChild(btn);
-    tr.appendChild(tdBtn);
-
-    return tr;
-  }
-
-  // Agregar filas del personal base
-  personal.forEach(function(p){ tbody.appendChild(crearFila(p, false)); });
-
-  // Agregar sección de pasantes
-  if(pasantes.length){
-    const trSep = document.createElement('tr');
-    const tdSep = document.createElement('td');
-    tdSep.colSpan = 4 + dias.length + 2;
-    tdSep.style.cssText = 'background:var(--az3);padding:6px 16px;font-size:11px;font-weight:700;color:var(--az2);border-top:2px solid var(--az4);letter-spacing:.4px;text-transform:uppercase';
-    tdSep.textContent = '🎓 Pasantes ('+pasantes.length+')';
-    trSep.appendChild(tdSep);
-    tbody.appendChild(trSep);
-    pasantes.forEach(function(p){ tbody.appendChild(crearFila(p, true)); });
-  }
+    btn.className='btn btn-ghost'; btn.style.cssText='font-size:11px;padding:4px 8px'; btn.textContent='✏';
+    btn.onclick = function(){ requirePin(function(){ editarPersonal(emp); }); };
+    td.appendChild(btn);
+  });
 }
 
 
@@ -951,14 +908,12 @@ function guardarPersonal(noEmpEditar){
 
   if(!noEmp||!nombre){ toast('Completa los campos obligatorios'); return; }
 
-  const tipo = document.getElementById('f-tipo') ? document.getElementById('f-tipo').value : 'base';
-  const finRotacion = document.getElementById('f-fin') ? document.getElementById('f-fin').value.trim() : '';
   if(noEmpEditar){
     const idx = DB.personal.findIndex(function(p){ return p.noEmp===noEmpEditar; });
-    if(idx>=0) DB.personal[idx] = {id:DB.personal[idx].id, noEmp, nombre, turno, puesto, fechaIngreso, tipo, finRotacion};
+    if(idx>=0) DB.personal[idx] = {id:DB.personal[idx].id, noEmp, nombre, turno, puesto, fechaIngreso};
   } else {
     if(DB.personal.find(function(p){ return p.noEmp===noEmp; })){ toast('⚠ Ya existe ese No. de empleado'); return; }
-    DB.personal.push({id:nid++, noEmp, nombre, turno, puesto, fechaIngreso, tipo:tipo||'base', finRotacion});
+    DB.personal.push({id:nid++, noEmp, nombre, turno, puesto, fechaIngreso});
   }
   guardarLocal();
   cerrarModal('modal-main');
@@ -1094,10 +1049,10 @@ function renderPersonal(){
       +'<td class="td-left"><span class="turno-badge">'+(TURNOS_LABEL[p.turno]||p.turno)+'</span></td>'
       +'<td class="td-left"><span class="td-ingreso">'+p.fechaIngreso+'</span></td>'
       +'<td></td>';
-    const btnEdit = document.createElement('button');
-    btnEdit.className='btn btn-ghost'; btnEdit.style.cssText='font-size:11px;padding:4px 8px'; btnEdit.textContent='✏';
-    (function(emp){ btnEdit.onclick=function(){ requirePin(function(){ editarPersonal(emp); }); }; })(p.noEmp);
-    tr.lastElementChild.appendChild(btnEdit);
+    const btnE = document.createElement('button');
+    btnE.className='btn btn-ghost'; btnE.style.cssText='font-size:11px;padding:4px 8px'; btnE.textContent='✏';
+    (function(emp){ btnE.onclick=function(){ requirePin(function(){ editarPersonal(emp); }); }; })(p.noEmp);
+    tr.lastElementChild.appendChild(btnE);
     tbody.appendChild(tr);
   });
 }
@@ -1255,7 +1210,7 @@ function cargarLocal(){
 }
 function recalcNid(){
   let max = 0;
-  ['personal','incidencias','eventual'].forEach(function(k){
+  ['personal','incidencias','eventual','textra'].forEach(function(k){
     (DB[k]||[]).forEach(function(r){ if(r.id>max) max=r.id; });
   });
   nid = max + 1;
@@ -1305,124 +1260,108 @@ async function syncEventual(){
   }catch(e){}
 }
 
+// ════════════════════════════════════════
+// PIN
+// ════════════════════════════════════════
 async function syncTextra(){
   if(!GAS_CONFIGURADO) return;
-  try{
-    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'saveTextra', data:DB.textra})});
-  }catch(e){}
+  try{ await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'saveTextra',data:DB.textra})}); }catch(e){}
 }
 
 function abrirModalTextra(id){
   const tx = id ? DB.textra.find(function(t){ return t.id===id; }) : null;
   const pOpts = DB.personal
-    .filter(function(p){ return p.tipo!=='pasante' && p.turno!=='eventual'; })
+    .filter(function(p){ return p.tipo!=='pasante'&&p.turno!=='eventual'; })
     .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); })
     .map(function(p){
-      const sel = tx && tx.noEmp===p.noEmp ? ' selected' : '';
-      return '<option value="'+p.noEmp+'"'+sel+'>'+p.nombre+' ('+TURNOS_LABEL[p.turno]+')</option>';
+      return '<option value="'+p.noEmp+'"'+(tx&&tx.noEmp===p.noEmp?' selected':'')+'>'+p.nombre+' ('+(TURNOS_LABEL[p.turno]||p.turno)+')</option>';
     }).join('');
-  document.getElementById('modal-title').textContent = tx ? 'Editar tiempo extra' : 'Registrar tiempo extra';
-  document.getElementById('modal-body').innerHTML = `
-    <div class="form-row">
-      <label class="form-label">Empleado *</label>
-      <select id="tx-emp" class="form-select"><option value="">— Selecciona —</option>${pOpts}</select>
-    </div>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label class="form-label">Fecha *</label>
-        <input id="tx-fecha" type="date" class="form-input" value="${tx?tx.fecha:''}">
-      </div>
-      <div class="form-row">
-        <label class="form-label">Horas extra *</label>
-        <input id="tx-horas" type="number" min="0.5" max="24" step="0.5" class="form-input" value="${tx?tx.horas:''}" placeholder="Ej. 4">
-      </div>
-    </div>
-    <div class="form-row">
-      <label class="form-label">Motivo *</label>
-      <textarea id="tx-motivo" class="form-textarea" rows="2">${tx?tx.motivo:''}</textarea>
-    </div>`;
-  const txFooter = document.getElementById('modal-footer');
-  txFooter.innerHTML = '';
-  const txBtnCan = document.createElement('button');
-  txBtnCan.className='btn btn-ghost'; txBtnCan.textContent='Cancelar';
-  txBtnCan.onclick=function(){ cerrarModal('modal-main'); };
-  txFooter.appendChild(txBtnCan);
-  if(tx){
-    const txBtnDel = document.createElement('button');
-    txBtnDel.className='btn btn-danger'; txBtnDel.textContent='Eliminar';
-    (function(xid){ txBtnDel.onclick=function(){ eliminarTextra(xid); }; })(tx.id);
-    txFooter.appendChild(txBtnDel);
-  }
-  const txBtnSave = document.createElement('button');
-  txBtnSave.className='btn btn-primary'; txBtnSave.textContent='Guardar';
-  (function(xid){ txBtnSave.onclick=function(){ guardarTextra(xid?String(xid):'null'); }; })(tx?tx.id:null);
-  txFooter.appendChild(txBtnSave);
+  document.getElementById('modal-title').textContent = tx?'Editar tiempo extra':'Registrar tiempo extra';
+  document.getElementById('modal-body').innerHTML = '<div class="form-row"><label class="form-label">Empleado *</label>'
+    +'<select id="tx-emp" class="form-select"><option value="">— Selecciona —</option>'+pOpts+'</select></div>'
+    +'<div class="form-row-2"><div class="form-row"><label class="form-label">Fecha *</label>'
+    +'<input id="tx-fecha" type="date" class="form-input" value="'+(tx?tx.fecha:'')+'"></div>'
+    +'<div class="form-row"><label class="form-label">Horas *</label>'
+    +'<input id="tx-horas" type="number" min="0.5" max="24" step="0.5" class="form-input" value="'+(tx?tx.horas:'')+'" placeholder="Ej. 4"></div></div>'
+    +'<div class="form-row"><label class="form-label">Motivo *</label>'
+    +'<textarea id="tx-motivo" class="form-textarea" rows="2">'+(tx?tx.motivo:'')+'</textarea></div>';
+  const ft = document.getElementById('modal-footer');
+  ft.innerHTML='';
+  const c=document.createElement('button'); c.className='btn btn-ghost'; c.textContent='Cancelar';
+  c.onclick=function(){ cerrarModal('modal-main'); }; ft.appendChild(c);
+  if(tx){ const d=document.createElement('button'); d.className='btn btn-danger'; d.textContent='Eliminar';
+    (function(xid){ d.onclick=function(){ eliminarTextra(xid); }; })(tx.id); ft.appendChild(d); }
+  const s=document.createElement('button'); s.className='btn btn-primary'; s.textContent='Guardar';
+  (function(xid){ s.onclick=function(){ guardarTextra(xid?String(xid):'null'); }; })(tx?tx.id:null);
+  ft.appendChild(s);
   abrirModal('modal-main');
 }
 
 function guardarTextra(idEditar){
-  const noEmp = document.getElementById('tx-emp').value;
-  const fecha = document.getElementById('tx-fecha').value;
-  const horas = parseFloat(document.getElementById('tx-horas').value);
-  const motivo = document.getElementById('tx-motivo').value.trim();
+  const noEmp=document.getElementById('tx-emp').value;
+  const fecha=document.getElementById('tx-fecha').value;
+  const horas=parseFloat(document.getElementById('tx-horas').value);
+  const motivo=document.getElementById('tx-motivo').value.trim();
   if(!noEmp||!fecha||!horas||!motivo){ toast('Completa todos los campos'); return; }
-  const persona = DB.personal.find(function(p){ return p.noEmp===noEmp; });
-  if(idEditar && idEditar!=='null'){
-    const idx = DB.textra.findIndex(function(t){ return t.id===Number(idEditar); });
-    if(idx>=0) DB.textra[idx] = {id:Number(idEditar), noEmp, nombre:persona?persona.nombre:'', turno:persona?persona.turno:'', fecha, horas, motivo};
-  } else {
-    DB.textra.push({id:nid++, noEmp, nombre:persona?persona.nombre:'', turno:persona?persona.turno:'', fecha, horas, motivo});
-  }
+  const p=DB.personal.find(function(x){ return x.noEmp===noEmp; });
+  const reg={noEmp,nombre:p?p.nombre:'',turno:p?p.turno:'',fecha,horas,motivo};
+  if(idEditar&&idEditar!=='null'){
+    const idx=DB.textra.findIndex(function(t){ return t.id===Number(idEditar); });
+    if(idx>=0){ reg.id=Number(idEditar); DB.textra[idx]=reg; }
+  } else { reg.id=nid++; DB.textra.push(reg); }
   guardarLocal(); cerrarModal('modal-main'); toast('✓ Tiempo extra guardado');
   renderTextra(); if(GAS_CONFIGURADO) syncTextra();
 }
 
 function eliminarTextra(id){
-  if(!confirm('¿Eliminar este registro?')) return;
-  DB.textra = DB.textra.filter(function(t){ return t.id!==id; });
+  if(!confirm('¿Eliminar?')) return;
+  DB.textra=DB.textra.filter(function(t){ return t.id!==id; });
   guardarLocal(); cerrarModal('modal-main'); renderTextra();
   if(GAS_CONFIGURADO) syncTextra();
 }
 
 function renderTextra(){
-  const mes = parseInt(document.getElementById('textra-mes').value);
-  const anio = parseInt(document.getElementById('textra-anio').value);
-  const filtroTurno = document.getElementById('textra-turno').value;
-  const lista = DB.textra.filter(function(t){
-    const d = new Date(t.fecha+'T12:00:00');
-    return d.getMonth()===mes && d.getFullYear()===anio && (!filtroTurno||t.turno===filtroTurno);
+  if(!document.getElementById('textra-mes')) return;
+  const mes=parseInt(document.getElementById('textra-mes').value);
+  const anio=parseInt(document.getElementById('textra-anio').value);
+  const ft=document.getElementById('textra-turno').value;
+  const lista=DB.textra.filter(function(t){
+    const d=new Date(t.fecha+'T12:00:00');
+    return d.getMonth()===mes&&d.getFullYear()===anio&&(!ft||t.turno===ft);
   }).sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
-  const totalHoras = lista.reduce(function(s,t){ return s+(parseFloat(t.horas)||0); }, 0);
-  document.getElementById('textra-count').textContent = lista.length+' registros';
-  document.getElementById('textra-total').textContent = totalHoras>0 ? '⏱ '+totalHoras+' hrs total' : '';
-  const tbody = document.getElementById('textra-tbody');
-  if(!lista.length){ tbody.innerHTML='<tr><td colspan="7" class="empty-msg">Sin registros de tiempo extra en este período</td></tr>'; return; }
-  tbody.innerHTML = lista.map(function(t){
+  const tot=lista.reduce(function(s,t){ return s+(parseFloat(t.horas)||0); },0);
+  document.getElementById('textra-count').textContent=lista.length+' registros';
+  document.getElementById('textra-total').textContent=tot>0?'⏱ '+tot+' hrs total':'';
+  const tb=document.getElementById('textra-tbody');
+  if(!lista.length){ tb.innerHTML='<tr><td colspan="7" class="empty-msg">Sin registros de tiempo extra</td></tr>'; return; }
+  tb.innerHTML=lista.map(function(t){
     return '<tr><td><span class="td-emp">'+t.noEmp+'</span></td>'
       +'<td style="font-weight:600">'+t.nombre+'</td>'
       +'<td><span class="turno-badge">'+(TURNOS_LABEL[t.turno]||t.turno)+'</span></td>'
       +'<td>'+t.fecha+'</td>'
       +'<td style="text-align:center;font-weight:700;color:var(--az)">'+t.horas+' h</td>'
       +'<td style="color:var(--txt2)">'+t.motivo+'</td>'
-      +'<td><button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="requirePin(function(){abrirModalTextra('+t.id+')})">✏</button></td>'
-      +'</tr>';
+      +'<td><button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" '
+      +'onclick="requirePin(function(){abrirModalTextra('+t.id+')})">✏</button></td></tr>';
   }).join('');
 }
 
 function exportarCSVTextra(){
-  const mes = parseInt(document.getElementById('textra-mes').value);
-  const anio = parseInt(document.getElementById('textra-anio').value);
-  const filtroTurno = document.getElementById('textra-turno').value;
-  const lista = DB.textra.filter(function(t){
-    const d = new Date(t.fecha+'T12:00:00');
-    return d.getMonth()===mes && d.getFullYear()===anio && (!filtroTurno||t.turno===filtroTurno);
+  if(!document.getElementById('textra-mes')) return;
+  const mes=parseInt(document.getElementById('textra-mes').value);
+  const anio=parseInt(document.getElementById('textra-anio').value);
+  const ft=document.getElementById('textra-turno').value;
+  const lista=DB.textra.filter(function(t){
+    const d=new Date(t.fecha+'T12:00:00');
+    return d.getMonth()===mes&&d.getFullYear()===anio&&(!ft||t.turno===ft);
   });
-  let csv = 'No.Emp,Nombre,Turno,Fecha,Horas,Motivo\n';
-  lista.forEach(function(t){
-    csv += [t.noEmp,'"'+t.nombre+'"',(TURNOS_LABEL[t.turno]||t.turno),t.fecha,t.horas,'"'+t.motivo+'"'].join(',')+('\n');
+  let csv='No.Emp,Nombre,Turno,Fecha,Horas,Motivo\n';
+
+  lista.forEach(function(t){ csv+=[t.noEmp,'"'+t.nombre+'"',(TURNOS_LABEL[t.turno]||t.turno),t.fecha,t.horas,'"'+t.motivo+'"'].join(',')+'\n';
   });
-  descargarCSV(csv, 'TiempoExtra_'+MESES[mes]+'_'+anio);
+  descargarCSV(csv,'TiempoExtra_'+MESES[mes]+'_'+anio);
 }
+
 function requirePin(cb){
   if(pinOK){ cb(); return; }
   pinCB = cb;
@@ -1487,14 +1426,8 @@ async function init(){
   }
 }
 
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
-
-
-
+init();
 </script>
 </body>
 </html>
+

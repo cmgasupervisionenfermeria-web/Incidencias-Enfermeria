@@ -725,7 +725,7 @@ function renderTurno(turno){
   dias.forEach(function(d){
     const dow = dowLetra(d.fecha);
     const esFin = dow === 'D' || dow === 'S';
-    thDias += '<th class="th-dia'+(esFin?' dow-d':'')+'" style="min-width:30px"><div class="th-dia-label">'+d.dia+'</div><div class="th-dia-dow">'+dow+'</div></th>';
+    thDias += '<th class="th-dia'+(esFin?' dow-d':'')+'" style="min-width:32px;width:32px"><div class="th-dia-label">'+d.dia+'</div><div class="th-dia-dow">'+dow+'</div></th>';
   });
 
   // Crear estructura base de la tabla
@@ -747,7 +747,7 @@ function renderTurno(turno){
 
   container.innerHTML = '';
   container.appendChild(card);
-  const tbody = document.getElementById('tbody-'+turno);
+  const tbody = card.querySelector('tbody');
 
   // Función para crear una fila de persona
   function crearFila(p, esPasante){
@@ -802,7 +802,7 @@ function renderTurno(turno){
       const td = document.createElement('td');
       td.className = 'inc-cell ' + cls;
       td.title = d.fecha;
-      td.textContent = inc || (esFin ? '' : '');
+      td.textContent = inc || (esFin ? '·' : '');
       (function(emp, fecha){ td.onclick = function(){ requirePin(function(){ abrirPickerIncidencia(emp, fecha, turno); }); }; })(p.noEmp, d.fecha);
       tr.appendChild(td);
     });

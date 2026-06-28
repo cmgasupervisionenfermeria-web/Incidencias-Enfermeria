@@ -692,8 +692,19 @@ function renderAlertas(turno){
 function renderTurno(turno){
   renderAlertas(turno);
   const {mes, anio, q} = quincenaActual;
-  const todos = DB.personal.filter(function(p){ return p.turno===turno; })
-                            .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
+  const todos = DB.personal.filter(function(p){ return p.turno===turno; });
+  // Orden: 1-Enfermeras/otros, 2-Camilleros, 3-Pasantes (cada grupo alfabético)
+  function ordenPersonal(p){
+    if(p.tipo==='pasante') return 3;
+    const puesto = (p.puesto||'').toLowerCase();
+    if(puesto.includes('camillero')) return 2;
+    return 1;
+  }
+  todos.sort(function(a,b){
+    const oa=ordenPersonal(a), ob=ordenPersonal(b);
+    if(oa!==ob) return oa-ob;
+    return a.nombre.localeCompare(b.nombre);
+  });
   const personal = todos.filter(function(p){ return p.tipo!=='pasante'; });
   const pasantes = todos.filter(function(p){ return p.tipo==='pasante'; });
   const dias = diasDelPeriodo(mes, anio, q);
@@ -764,7 +775,20 @@ function renderTurno(turno){
   }
 
   let rowsHTML = '';
-  personal.forEach(function(p){ rowsHTML += filaHTML(p, false); });
+  let grupoAnterior = 0;
+  personal.forEach(function(p){
+    const puesto = (p.puesto||'').toLowerCase();
+    const grupo = puesto.includes('camillero') ? 2 : 1;
+    if(grupoAnterior===1 && grupo===2){
+      // Separador entre enfermeras y camilleros
+      rowsHTML += '<tr><td colspan="'+(4+dias.length+2)+'" '
+        +'style="background:var(--bg2);padding:4px 16px;font-size:10px;font-weight:700;'
+        +'color:var(--txt3);letter-spacing:.5px;text-transform:uppercase;border-top:1px solid var(--bg3)">'
+        +'🚑 Camilleros</td></tr>';
+    }
+    grupoAnterior = grupo;
+    rowsHTML += filaHTML(p, false);
+  });
 
   if(pasantes.length){
     rowsHTML += '<tr><td colspan="'+(4+dias.length+2)+'" '
@@ -862,10 +886,11 @@ function abrirModalPersonal(noEmpEditar, turnoDefault){
   const p = noEmpEditar ? DB.personal.find(function(x){ return x.noEmp===noEmpEditar; }) : null;
   document.getElementById('modal-title').textContent = p ? 'Editar empleado' : 'Nuevo empleado';
 
-  let turnosOpts = TURNOS.map(function(t){
+  let turnosOpts = TURNOS_CAT.map(function(t){
     const sel = (p?p.turno:turnoDefault)===t?' selected':'';
     return '<option value="'+t+'"'+sel+'>'+TURNOS_LABEL[t]+'</option>';
   }).join('');
+  const esPas = p && p.tipo==='pasante';
 
   document.getElementById('modal-body').innerHTML = `
     <div class="form-row-2">
@@ -874,8 +899,11 @@ function abrirModalPersonal(noEmpEditar, turnoDefault){
         <input id="f-noemp" class="form-input" value="${p?p.noEmp:''}" placeholder="Ej. 46098" ${p?'readonly':''}>
       </div>
       <div class="form-row">
-        <label class="form-label">Turno *</label>
-        <select id="f-turno" class="form-select">${turnosOpts}</select>
+        <label class="form-label">Tipo *</label>
+        <select id="f-tipo" class="form-select" onchange="document.getElementById('f-fin-row').style.opacity=this.value==='pasante'?'1':'0.4'">
+          <option value="base" ${!esPas?'selected':''}>Personal de base</option>
+          <option value="pasante" ${esPas?'selected':''}>Pasante</option>
+        </select>
       </div>
     </div>
     <div class="form-row">
@@ -884,12 +912,22 @@ function abrirModalPersonal(noEmpEditar, turnoDefault){
     </div>
     <div class="form-row-2">
       <div class="form-row">
-        <label class="form-label">Puesto</label>
-        <input id="f-puesto" class="form-input" value="${p?p.puesto:''}" placeholder="Enfermera, Camillero...">
+        <label class="form-label">Turno *</label>
+        <select id="f-turno" class="form-select">${turnosOpts}</select>
       </div>
       <div class="form-row">
-        <label class="form-label">Fecha ingreso</label>
+        <label class="form-label">Puesto / Área rotación</label>
+        <input id="f-puesto" class="form-input" value="${p?p.puesto:''}" placeholder="Enfermera, Camillero...">
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Fecha ingreso / Inicio rotación</label>
         <input id="f-ingreso" class="form-input" value="${p?p.fechaIngreso:''}" placeholder="DD.MM.AA">
+      </div>
+      <div class="form-row" id="f-fin-row" style="${esPas?'':'opacity:.4'}">
+        <label class="form-label">Fin de rotación (pasante)</label>
+        <input id="f-fin" class="form-input" value="${p&&p.finRotacion?p.finRotacion:''}" placeholder="DD.MM.AA">
       </div>
     </div>`;
 
@@ -909,12 +947,14 @@ function guardarPersonal(noEmpEditar){
 
   if(!noEmp||!nombre){ toast('Completa los campos obligatorios'); return; }
 
+  const tipo = document.getElementById('f-tipo') ? document.getElementById('f-tipo').value : 'base';
+  const finRotacion = document.getElementById('f-fin') ? document.getElementById('f-fin').value.trim() : '';
   if(noEmpEditar){
     const idx = DB.personal.findIndex(function(p){ return p.noEmp===noEmpEditar; });
-    if(idx>=0) DB.personal[idx] = {id:DB.personal[idx].id, noEmp, nombre, turno, puesto, fechaIngreso};
+    if(idx>=0) DB.personal[idx] = {id:DB.personal[idx].id, noEmp, nombre, turno, puesto, fechaIngreso, tipo, finRotacion};
   } else {
     if(DB.personal.find(function(p){ return p.noEmp===noEmp; })){ toast('⚠ Ya existe ese No. de empleado'); return; }
-    DB.personal.push({id:nid++, noEmp, nombre, turno, puesto, fechaIngreso});
+    DB.personal.push({id:nid++, noEmp, nombre, turno, puesto, fechaIngreso, tipo:tipo||'base', finRotacion:finRotacion||''});
   }
   guardarLocal();
   cerrarModal('modal-main');
@@ -1431,4 +1471,3 @@ init();
 </script>
 </body>
 </html>
-

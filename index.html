@@ -514,6 +514,13 @@ const INCIDENCIAS = [
 const INC_MAP = {};
 INCIDENCIAS.forEach(function(i){ INC_MAP[i.c]=i; });
 
+function clickCell(el){
+  const noEmp = el.dataset.emp;
+  const fecha = el.dataset.fecha;
+  const turno = el.dataset.turno;
+  requirePin(function(){ abrirPickerIncidencia(noEmp, fecha, turno); });
+}
+
 function clsInc(c){
   if(!c) return 'ic-vacio';
   const norm = c.replace('/','').replace(' ','');
@@ -1430,4 +1437,3 @@ init();
 </script>
 </body>
 </html>
-

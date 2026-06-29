@@ -1637,21 +1637,25 @@ function recalcNid(){
 // GAS SYNC
 // ════════════════════════════════════════
 function apiCall(params){
-  return new Promise(function(resolve, reject){
-    const cb='cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
-    const sc=document.createElement('script');
-    let done=false;
-    function cleanup(){ delete window[cb]; if(sc.parentNode)sc.parentNode.removeChild(sc); }
-    window[cb]=function(data){ done=true; cleanup(); resolve(data); };
-    sc.onerror=function(){ if(!done){ cleanup(); reject(new Error('JSONP error')); } };
-    const qs=Object.keys(params).map(function(k){
-      return encodeURIComponent(k)+'='+encodeURIComponent(typeof params[k]==='object'?JSON.stringify(params[k]):params[k]);
-    }).join('&');
-    sc.src=GAS_URL+'?'+qs+'&callback='+cb;
-    document.body.appendChild(sc);
-    setTimeout(function(){ if(!done){ cleanup(); reject(new Error('timeout')); } },15000);
-  });
+  // Para lecturas (getAll): fetch normal
+  // Para escrituras (save*): fetch no-cors (fire and forget)
+  const isRead = params.action === 'getAll' || params.action === 'ping';
+  const qs = Object.keys(params).map(function(k){
+    return encodeURIComponent(k)+'='+encodeURIComponent(
+      typeof params[k]==='object' ? JSON.stringify(params[k]) : params[k]
+    );
+  }).join('&');
+  const fullUrl = GAS_URL+'?'+qs;
+
+  if(isRead){
+    return fetch(fullUrl).then(function(r){ return r.json(); });
+  } else {
+    // no-cors: el browser envía la petición pero no podemos leer la respuesta
+    // El GAS la recibe y procesa igual
+    return fetch(fullUrl, {mode:'no-cors'}).then(function(){ return {ok:true}; }).catch(function(){ return {ok:false}; });
+  }
 }
+
 
 async function syncGAS(){
   if(!GAS_CONFIGURADO){ toast('⚠ GAS no configurado'); return; }

@@ -1845,42 +1845,10 @@ document.querySelectorAll('.modal-overlay').forEach(function(o){
 // INIT
 // ════════════════════════════════════════
 async function init(){
-  // Cargar caché local primero (siempre disponible)
-  cargarLocal(); recalcNid();
+  cargarLocal();
+  recalcNid();
   actualizarLabels();
   renderPagina('tmat');
-
-  if(GAS_CONFIGURADO){
-    showLoader('🔄 Cargando datos…');
-    try{
-      const data = await apiCall({action:'getAll'});
-      if(data && typeof data === 'object'){
-        const pArr = Array.isArray(data.personal)    ? data.personal    : [];
-        const iArr = Array.isArray(data.incidencias) ? data.incidencias : [];
-        const eArr = Array.isArray(data.eventual)    ? data.eventual    : [];
-        const tArr = Array.isArray(data.textra)      ? data.textra      : [];
-
-        // Solo reemplazar si Sheets tiene datos — nunca sobreescribir con vacío
-        if(pArr.length > 0){
-          DB.personal = pArr.map(function(p){
-            if(p.fechaIngreso && p.fechaIngreso.length > 10) p.fechaIngreso = p.fechaIngreso.substring(0,10);
-            if(p.finRotacion  && p.finRotacion.length  > 10) p.finRotacion  = p.finRotacion.substring(0,10);
-            return p;
-          });
-        }
-        if(iArr.length > 0) DB.incidencias = iArr;
-        if(eArr.length > 0) DB.eventual    = eArr;
-        if(tArr.length > 0) DB.textra      = tArr;
-
-        recalcNid();
-        guardarLocal();
-        renderPagina('tmat');
-      }
-    } catch(e){
-      console.error('GAS error al iniciar:', e);
-    }
-    hideLoader();
-  }
 }
 
 init();

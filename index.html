@@ -1705,34 +1705,33 @@ async function syncTextra(){
 // INIT — carga local primero, luego Sheets
 // ════════════════════════════════════════
 async function init(){
-  const hayLocal = cargarLocal();
+  // Cargar local primero para mostrar datos inmediatos
+  cargarLocal();
   recalcNid();
   actualizarLabels();
   renderPagina('tmat');
   if(!GAS_CONFIGURADO) return;
+  // Descargar Sheets y reemplazar siempre (Sheets es la fuente de verdad)
   try{
     const r = await fetch(GAS_URL+'?action=getAll');
     const data = await r.json();
     if(data && typeof data==='object'){
-      const pArr = Array.isArray(data.personal)    ? data.personal    : [];
-      const iArr = Array.isArray(data.incidencias) ? data.incidencias : [];
-      const eArr = Array.isArray(data.eventual)    ? data.eventual    : [];
-      const tArr = Array.isArray(data.textra)      ? data.textra      : [];
       let cambio = false;
-      if(pArr.length > 0){
-        DB.personal = pArr.map(function(p){
+      if(Array.isArray(data.personal) && data.personal.length>0){
+        DB.personal = data.personal.map(function(p){
           if(p.fechaIngreso && String(p.fechaIngreso).length>10) p.fechaIngreso=String(p.fechaIngreso).substring(0,10);
           if(p.finRotacion  && String(p.finRotacion).length >10) p.finRotacion =String(p.finRotacion).substring(0,10);
           return p;
         }); cambio=true;
       }
-      if(iArr.length>0 && (!hayLocal || iArr.length>=DB.incidencias.length)){ DB.incidencias=iArr; cambio=true; }
-      if(eArr.length>0 && (!hayLocal || eArr.length>=DB.eventual.length))   { DB.eventual=eArr;    cambio=true; }
-      if(tArr.length>0 && (!hayLocal || tArr.length>=DB.textra.length))     { DB.textra=tArr;      cambio=true; }
+      if(Array.isArray(data.incidencias)){ DB.incidencias=data.incidencias; cambio=true; }
+      if(Array.isArray(data.eventual))   { DB.eventual=data.eventual;       cambio=true; }
+      if(Array.isArray(data.textra))     { DB.textra=data.textra;           cambio=true; }
       if(cambio){ recalcNid(); guardarLocal(); renderPagina('tmat'); }
     }
   } catch(e){ console.error('GAS init error:',e); }
 }
 
-init();
-</script>
+init();</script>
+
+  

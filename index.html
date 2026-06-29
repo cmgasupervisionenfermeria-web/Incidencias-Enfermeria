@@ -1657,22 +1657,44 @@ async function syncGAS(){
   if(!GAS_CONFIGURADO){ toast('⚠ GAS no configurado'); return; }
   showLoader('🔄 Sincronizando con Google Sheets…');
   try{
-    const r = await fetch(GAS_URL+'?action=getAll');
-    const data = await r.json();
+    const data = await apiCall({action:'getAll'});
     if(data && typeof data === 'object'){
-      if(Array.isArray(data.personal)) DB.personal = data.personal.map(function(p){
+      const pArr = Array.isArray(data.personal)    ? data.personal    : [];
+      const iArr = Array.isArray(data.incidencias) ? data.incidencias : [];
+      const eArr = Array.isArray(data.eventual)    ? data.eventual    : [];
+      const tArr = Array.isArray(data.textra)      ? data.textra      : [];
+
+      // Personal: usar Sheets si tiene datos, si no conservar local
+      if(pArr.length > 0){
+        DB.personal = pArr.map(function(p){
           if(p.fechaIngreso && p.fechaIngreso.length > 10) p.fechaIngreso = p.fechaIngreso.substring(0,10);
           if(p.finRotacion  && p.finRotacion.length  > 10) p.finRotacion  = p.finRotacion.substring(0,10);
           return p;
         });
-      if(Array.isArray(data.incidencias)) DB.incidencias = data.incidencias;
-      if(Array.isArray(data.eventual)) DB.eventual = data.eventual;
-      if(Array.isArray(data.textra)) DB.textra = data.textra;
+      }
+      // Incidencias/Eventual/Textra: fusionar — conservar local si Sheets tiene menos
+      if(iArr.length >= DB.incidencias.length) DB.incidencias = iArr;
+      if(eArr.length >= DB.eventual.length)    DB.eventual    = eArr;
+      if(tArr.length >= DB.textra.length)      DB.textra      = tArr;
+
       recalcNid();
       guardarLocal();
-      toast('✓ Datos sincronizados');
+
+      // Si Sheets tiene menos datos que local → subir los datos locales a Sheets
+      if(iArr.length < DB.incidencias.length){
+        toast('⬆ Subiendo incidencias a Sheets…');
+        for(const i of DB.incidencias){
+          await apiCall({action:'saveIncidencia',record:{noEmp:i.noEmp,fecha:i.fecha,incidencia:i.incidencia,observacion:i.observacion||''}});
+        }
+      }
+      if(eArr.length < DB.eventual.length)
+        await apiCall({action:'saveEventual',data:DB.eventual});
+      if(tArr.length < DB.textra.length)
+        await apiCall({action:'saveTextra',data:DB.textra});
+
+      toast('✓ Sincronizado — Personal:'+DB.personal.length+' Inc:'+DB.incidencias.length);
     }
-  }catch(e){ toast('⚠ Error al sincronizar'); }
+  }catch(e){ toast('⚠ Error al sincronizar: '+e.message); }
   hideLoader();
   renderPagina(paginaActual);
 }

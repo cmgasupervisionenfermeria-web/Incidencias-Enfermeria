@@ -1636,6 +1636,23 @@ function recalcNid(){
 // ════════════════════════════════════════
 // GAS SYNC
 // ════════════════════════════════════════
+function apiCall(params){
+  return new Promise(function(resolve, reject){
+    const cb='cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
+    const sc=document.createElement('script');
+    let done=false;
+    function cleanup(){ delete window[cb]; if(sc.parentNode)sc.parentNode.removeChild(sc); }
+    window[cb]=function(data){ done=true; cleanup(); resolve(data); };
+    sc.onerror=function(){ if(!done){ cleanup(); reject(new Error('JSONP error')); } };
+    const qs=Object.keys(params).map(function(k){
+      return encodeURIComponent(k)+'='+encodeURIComponent(typeof params[k]==='object'?JSON.stringify(params[k]):params[k]);
+    }).join('&');
+    sc.src=GAS_URL+'?'+qs+'&callback='+cb;
+    document.body.appendChild(sc);
+    setTimeout(function(){ if(!done){ cleanup(); reject(new Error('timeout')); } },15000);
+  });
+}
+
 async function syncGAS(){
   if(!GAS_CONFIGURADO){ toast('⚠ GAS no configurado'); return; }
   showLoader('🔄 Sincronizando con Google Sheets…');
@@ -1662,23 +1679,17 @@ async function syncGAS(){
 
 async function syncPersonal(){
   if(!GAS_CONFIGURADO) return;
-  try{
-    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'savePersonal', data:DB.personal})});
-  }catch(e){}
+  try{ await apiCall({action:'savePersonal',data:DB.personal}); }catch(e){}
 }
 
 async function syncIncidencia(noEmp, fecha, inc, obs){
   if(!GAS_CONFIGURADO) return;
-  try{
-    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'saveIncidencia', noEmp, fecha, incidencia:inc, observacion:obs})});
-  }catch(e){}
+  try{ await apiCall({action:'saveIncidencia',record:{noEmp:noEmp,fecha:fecha,incidencia:inc,observacion:obs||''}}); }catch(e){}
 }
 
 async function syncEventual(){
   if(!GAS_CONFIGURADO) return;
-  try{
-    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'saveEventual', data:DB.eventual})});
-  }catch(e){}
+  try{ await apiCall({action:'saveEventual',data:DB.eventual}); }catch(e){}
 }
 
 // ════════════════════════════════════════
@@ -1686,7 +1697,7 @@ async function syncEventual(){
 // ════════════════════════════════════════
 async function syncTextra(){
   if(!GAS_CONFIGURADO) return;
-  try{ await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'saveTextra',data:DB.textra})}); }catch(e){}
+  try{ await apiCall({action:'saveTextra',data:DB.textra}); }catch(e){}
 }
 
 function abrirModalTextra(id){
@@ -1834,33 +1845,42 @@ document.querySelectorAll('.modal-overlay').forEach(function(o){
 // INIT
 // ════════════════════════════════════════
 async function init(){
+  // Cargar caché local primero (siempre disponible)
+  cargarLocal(); recalcNid();
   actualizarLabels();
+  renderPagina('tmat');
+
   if(GAS_CONFIGURADO){
     showLoader('🔄 Cargando datos…');
     try{
-      const r = await fetch(GAS_URL+'?action=getAll');
-      const data = await r.json();
+      const data = await apiCall({action:'getAll'});
       if(data && typeof data === 'object'){
-        if(Array.isArray(data.personal))    DB.personal    = data.personal.map(function(p){
+        const pArr = Array.isArray(data.personal)    ? data.personal    : [];
+        const iArr = Array.isArray(data.incidencias) ? data.incidencias : [];
+        const eArr = Array.isArray(data.eventual)    ? data.eventual    : [];
+        const tArr = Array.isArray(data.textra)      ? data.textra      : [];
+
+        // Solo reemplazar si Sheets tiene datos — nunca sobreescribir con vacío
+        if(pArr.length > 0){
+          DB.personal = pArr.map(function(p){
             if(p.fechaIngreso && p.fechaIngreso.length > 10) p.fechaIngreso = p.fechaIngreso.substring(0,10);
             if(p.finRotacion  && p.finRotacion.length  > 10) p.finRotacion  = p.finRotacion.substring(0,10);
             return p;
           });
-        if(Array.isArray(data.incidencias)) DB.incidencias = data.incidencias;
-        if(Array.isArray(data.eventual))    DB.eventual    = data.eventual;
-        if(Array.isArray(data.textra))      DB.textra      = data.textra;
+        }
+        if(iArr.length > 0) DB.incidencias = iArr;
+        if(eArr.length > 0) DB.eventual    = eArr;
+        if(tArr.length > 0) DB.textra      = tArr;
+
         recalcNid();
         guardarLocal();
+        renderPagina('tmat');
       }
     } catch(e){
-      // Sin conexión — usar caché local
-      cargarLocal(); recalcNid();
+      console.error('GAS error al iniciar:', e);
     }
     hideLoader();
-  } else {
-    cargarLocal(); recalcNid();
   }
-  renderPagina('tmat');
 }
 
 init();

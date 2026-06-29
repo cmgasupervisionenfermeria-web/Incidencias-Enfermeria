@@ -1636,65 +1636,46 @@ function recalcNid(){
 // ════════════════════════════════════════
 // GAS SYNC
 // ════════════════════════════════════════
-function apiCall(params){
-  return new Promise(function(resolve, reject){
-    const cb='cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
-    const sc=document.createElement('script');
-    let done=false;
-    function cleanup(){ delete window[cb]; if(sc.parentNode)sc.parentNode.removeChild(sc); }
-    window[cb]=function(data){ done=true; cleanup(); resolve(data); };
-    sc.onerror=function(){ if(!done){ cleanup(); reject(new Error('JSONP error')); } };
-    const qs=Object.keys(params).map(function(k){
-      return encodeURIComponent(k)+'='+encodeURIComponent(typeof params[k]==='object'?JSON.stringify(params[k]):params[k]);
-    }).join('&');
-    sc.src=GAS_URL+'?'+qs+'&callback='+cb;
-    document.body.appendChild(sc);
-    setTimeout(function(){ if(!done){ cleanup(); reject(new Error('timeout')); } },15000);
-  });
+async function apiCall(payload){
+  if(!GAS_CONFIGURADO) return {ok:true};
+  try{
+    const params = new URLSearchParams();
+    Object.keys(payload).forEach(function(k){
+      params.append(k, typeof payload[k]==='object' ? JSON.stringify(payload[k]) : payload[k]);
+    });
+    const r = await fetch(GAS_URL+'?'+params.toString());
+    const data = await r.json();
+    return data;
+  } catch(e){
+    console.error('GAS error:',e);
+    return {ok:false};
+  }
 }
+
 
 async function syncGAS(){
   if(!GAS_CONFIGURADO){ toast('⚠ GAS no configurado'); return; }
-  showLoader('⬆ Subiendo datos locales a Sheets…');
+  showLoader('🔄 Sincronizando…');
   try{
-    // PASO 1: Subir todo lo local a Sheets
-    if(DB.personal.length > 0)
-      await apiCall({action:'savePersonal', data:DB.personal});
-    for(const i of DB.incidencias){
-      await apiCall({action:'saveIncidencia', record:{noEmp:i.noEmp, fecha:i.fecha, incidencia:i.incidencia, observacion:i.observacion||''}});
-    }
-    if(DB.eventual.length > 0)
-      await apiCall({action:'saveEventual', data:DB.eventual});
-    if(DB.textra.length > 0)
-      await apiCall({action:'saveTextra', data:DB.textra});
-
-    // PASO 2: Descargar Sheets (ahora tiene todo)
-    showLoader('⬇ Descargando datos de Sheets…');
-    const data = await apiCall({action:'getAll'});
+    const r = await fetch(GAS_URL+'?action=getAll');
+    const data = await r.json();
     if(data && typeof data === 'object'){
       const pArr = Array.isArray(data.personal)    ? data.personal    : [];
       const iArr = Array.isArray(data.incidencias) ? data.incidencias : [];
       const eArr = Array.isArray(data.eventual)    ? data.eventual    : [];
       const tArr = Array.isArray(data.textra)      ? data.textra      : [];
-
-      if(pArr.length > 0){
-        DB.personal = pArr.map(function(p){
-          if(p.fechaIngreso && String(p.fechaIngreso).length > 10) p.fechaIngreso = String(p.fechaIngreso).substring(0,10);
-          if(p.finRotacion  && String(p.finRotacion).length  > 10) p.finRotacion  = String(p.finRotacion).substring(0,10);
-          return p;
-        });
-      }
+      if(pArr.length > 0) DB.personal = pArr.map(function(p){
+        if(p.fechaIngreso && String(p.fechaIngreso).length>10) p.fechaIngreso=String(p.fechaIngreso).substring(0,10);
+        if(p.finRotacion  && String(p.finRotacion).length >10) p.finRotacion =String(p.finRotacion).substring(0,10);
+        return p;
+      });
       if(iArr.length > 0) DB.incidencias = iArr;
       if(eArr.length > 0) DB.eventual    = eArr;
       if(tArr.length > 0) DB.textra      = tArr;
-
-      recalcNid();
-      guardarLocal();
-      toast('✓ Sincronizado — Personal:'+DB.personal.length+' Inc:'+DB.incidencias.length);
+      recalcNid(); guardarLocal();
+      toast('✓ Sincronizado');
     }
-  } catch(e){
-    toast('⚠ Error: '+e.message);
-  }
+  } catch(e){ toast('⚠ Error al sincronizar'); }
   hideLoader();
   renderPagina(paginaActual);
 }
@@ -1867,53 +1848,38 @@ document.querySelectorAll('.modal-overlay').forEach(function(o){
 // INIT
 // ════════════════════════════════════════
 async function init(){
-  // 1. Cargar local primero para mostrar algo inmediato
   const hayLocal = cargarLocal();
   recalcNid();
   actualizarLabels();
   renderPagina('tmat');
-
-  // 2. Descargar Sheets en segundo plano
-  if(GAS_CONFIGURADO){
-    try{
-      const data = await apiCall({action:'getAll'});
-      if(data && typeof data === 'object'){
-        const pArr = Array.isArray(data.personal)    ? data.personal    : [];
-        const iArr = Array.isArray(data.incidencias) ? data.incidencias : [];
-        const eArr = Array.isArray(data.eventual)    ? data.eventual    : [];
-        const tArr = Array.isArray(data.textra)      ? data.textra      : [];
-        let cambio = false;
-
-        // Si NO hay datos locales → tomar Sheets directamente
-        // Si SÍ hay datos locales → tomar Sheets solo si tiene MÁS
-        if(!hayLocal || pArr.length > DB.personal.length){
-          if(pArr.length > 0){
-            DB.personal = pArr.map(function(p){
-              if(p.fechaIngreso && String(p.fechaIngreso).length > 10) p.fechaIngreso = String(p.fechaIngreso).substring(0,10);
-              if(p.finRotacion  && String(p.finRotacion).length  > 10) p.finRotacion  = String(p.finRotacion).substring(0,10);
-              return p;
-            });
-            cambio = true;
-          }
-        }
-        if(!hayLocal || iArr.length > DB.incidencias.length){
-          if(iArr.length > 0){ DB.incidencias = iArr; cambio = true; }
-        }
-        if(!hayLocal || eArr.length > DB.eventual.length){
-          if(eArr.length > 0){ DB.eventual = eArr; cambio = true; }
-        }
-        if(!hayLocal || tArr.length > DB.textra.length){
-          if(tArr.length > 0){ DB.textra = tArr; cambio = true; }
-        }
-        if(cambio){ recalcNid(); guardarLocal(); renderPagina('tmat'); }
+  if(!GAS_CONFIGURADO){ return; }
+  try{
+    const r = await fetch(GAS_URL+'?action=getAll');
+    const data = await r.json();
+    if(data && typeof data === 'object'){
+      const pArr = Array.isArray(data.personal)    ? data.personal    : [];
+      const iArr = Array.isArray(data.incidencias) ? data.incidencias : [];
+      const eArr = Array.isArray(data.eventual)    ? data.eventual    : [];
+      const tArr = Array.isArray(data.textra)      ? data.textra      : [];
+      let cambio = false;
+      if(pArr.length > 0){
+        DB.personal = pArr.map(function(p){
+          if(p.fechaIngreso && String(p.fechaIngreso).length>10) p.fechaIngreso=String(p.fechaIngreso).substring(0,10);
+          if(p.finRotacion  && String(p.finRotacion).length >10) p.finRotacion =String(p.finRotacion).substring(0,10);
+          return p;
+        }); cambio=true;
       }
-    } catch(e){ /* Sin conexión — usar caché local */ }
-  }
+      // Tomar Sheets si no hay local O si Sheets tiene más datos
+      if(iArr.length > 0 && (!hayLocal || iArr.length >= DB.incidencias.length)){ DB.incidencias=iArr; cambio=true; }
+      if(eArr.length > 0 && (!hayLocal || eArr.length >= DB.eventual.length))   { DB.eventual=eArr;    cambio=true; }
+      if(tArr.length > 0 && (!hayLocal || tArr.length >= DB.textra.length))     { DB.textra=tArr;      cambio=true; }
+      if(cambio){ recalcNid(); guardarLocal(); renderPagina('tmat'); }
+    }
+  } catch(e){ console.error('GAS init error:',e); }
 }
 
 init();
 </script>
 </body>
 </html>
-
 

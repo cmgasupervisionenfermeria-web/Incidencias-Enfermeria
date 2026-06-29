@@ -1705,33 +1705,31 @@ async function syncTextra(){
 // INIT — carga local primero, luego Sheets
 // ════════════════════════════════════════
 async function init(){
-  // Cargar local primero para mostrar datos inmediatos
   cargarLocal();
   recalcNid();
   actualizarLabels();
   renderPagina('tmat');
   if(!GAS_CONFIGURADO) return;
-  // Descargar Sheets y reemplazar siempre (Sheets es la fuente de verdad)
   try{
     const r = await fetch(GAS_URL+'?action=getAll');
     const data = await r.json();
     if(data && typeof data==='object'){
-      let cambio = false;
       if(Array.isArray(data.personal) && data.personal.length>0){
         DB.personal = data.personal.map(function(p){
           if(p.fechaIngreso && String(p.fechaIngreso).length>10) p.fechaIngreso=String(p.fechaIngreso).substring(0,10);
           if(p.finRotacion  && String(p.finRotacion).length >10) p.finRotacion =String(p.finRotacion).substring(0,10);
           return p;
-        }); cambio=true;
+        });
       }
-      if(Array.isArray(data.incidencias)){ DB.incidencias=data.incidencias; cambio=true; }
-      if(Array.isArray(data.eventual))   { DB.eventual=data.eventual;       cambio=true; }
-      if(Array.isArray(data.textra))     { DB.textra=data.textra;           cambio=true; }
-      if(cambio){ recalcNid(); guardarLocal(); renderPagina('tmat'); }
+      if(Array.isArray(data.incidencias)) DB.incidencias = data.incidencias;
+      if(Array.isArray(data.eventual))    DB.eventual    = data.eventual;
+      if(Array.isArray(data.textra))      DB.textra      = data.textra;
+      recalcNid(); guardarLocal(); renderPagina('tmat');
     }
   } catch(e){ console.error('GAS init error:',e); }
 }
 
-init();</script>
-
-  
+init();
+</script>
+</body>
+</html>

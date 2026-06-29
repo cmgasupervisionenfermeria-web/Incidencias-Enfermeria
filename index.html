@@ -1643,7 +1643,11 @@ async function syncGAS(){
     const r = await fetch(GAS_URL+'?action=getAll');
     const data = await r.json();
     if(data && typeof data === 'object'){
-      if(Array.isArray(data.personal)) DB.personal = data.personal;
+      if(Array.isArray(data.personal)) DB.personal = data.personal.map(function(p){
+          if(p.fechaIngreso && p.fechaIngreso.length > 10) p.fechaIngreso = p.fechaIngreso.substring(0,10);
+          if(p.finRotacion  && p.finRotacion.length  > 10) p.finRotacion  = p.finRotacion.substring(0,10);
+          return p;
+        });
       if(Array.isArray(data.incidencias)) DB.incidencias = data.incidencias;
       if(Array.isArray(data.eventual)) DB.eventual = data.eventual;
       if(Array.isArray(data.textra)) DB.textra = data.textra;
@@ -1837,7 +1841,11 @@ async function init(){
       const r = await fetch(GAS_URL+'?action=getAll');
       const data = await r.json();
       if(data && typeof data === 'object'){
-        if(Array.isArray(data.personal))    DB.personal    = data.personal;
+        if(Array.isArray(data.personal))    DB.personal    = data.personal.map(function(p){
+            if(p.fechaIngreso && p.fechaIngreso.length > 10) p.fechaIngreso = p.fechaIngreso.substring(0,10);
+            if(p.finRotacion  && p.finRotacion.length  > 10) p.finRotacion  = p.finRotacion.substring(0,10);
+            return p;
+          });
         if(Array.isArray(data.incidencias)) DB.incidencias = data.incidencias;
         if(Array.isArray(data.eventual))    DB.eventual    = data.eventual;
         if(Array.isArray(data.textra))      DB.textra      = data.textra;
@@ -1859,3 +1867,4 @@ init();
 </script>
 </body>
 </html>
+

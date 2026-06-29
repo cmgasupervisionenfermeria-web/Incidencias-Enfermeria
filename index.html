@@ -229,7 +229,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <button class="nav-tab" onclick="showPage('textra',this)">⏱ Tiempo Extra</button>
   <div class="nav-right">
     <button class="btn-pin" onclick="abrirPin()">🔒 PIN</button>
-    <button class="btn-sync" onclick="subirDatosASheets()" title="Sube tus datos locales a Google Sheets" style="background:rgba(34,197,94,.2);border-color:rgba(34,197,94,.4)">⬆ Subir</button>
     <button class="btn-sync" onclick="syncGAS()">↺ Sync</button>
   </div>
 </nav>
@@ -1637,32 +1636,6 @@ function recalcNid(){
 // ════════════════════════════════════════
 // GAS SYNC
 // ════════════════════════════════════════
-async function subirDatosASheets(){
-  if(!GAS_CONFIGURADO){ toast('⚠ Configura primero la URL del GAS'); return; }
-  if(!DB.personal.length && !DB.incidencias.length && !DB.eventual.length && !DB.textra.length){
-    toast('⚠ No hay datos locales para subir'); return;
-  }
-  if(!confirm('¿Subir todos tus datos locales a Google Sheets?\n\nPersonal: '+DB.personal.length+' registros\nIncidencias: '+DB.incidencias.length+' registros\nEventual: '+DB.eventual.length+' registros\nTiempo Extra: '+DB.textra.length+' registros')) return;
-
-  showLoader('⬆ Subiendo datos a Google Sheets…');
-  try{
-    // 1. Subir personal
-    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'savePersonal', data:DB.personal})});
-    // 2. Subir incidencias una por una (upsert)
-    for(const i of DB.incidencias){
-      await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'saveIncidencia', noEmp:i.noEmp, fecha:i.fecha, incidencia:i.incidencia, observacion:i.observacion||''})});
-    }
-    // 3. Subir eventual
-    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'saveEventual', data:DB.eventual})});
-    // 4. Subir textra
-    await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'saveTextra', data:DB.textra})});
-    toast('✓ Todos los datos subidos a Google Sheets ☁️');
-  } catch(e){
-    toast('⚠ Error al subir — verifica la URL del GAS');
-  }
-  hideLoader();
-}
-
 async function syncGAS(){
   if(!GAS_CONFIGURADO){ toast('⚠ GAS no configurado'); return; }
   showLoader('🔄 Sincronizando con Google Sheets…');
@@ -1857,30 +1830,32 @@ document.querySelectorAll('.modal-overlay').forEach(function(o){
 // INIT
 // ════════════════════════════════════════
 async function init(){
-  const hayLocal = cargarLocal();
-  if(hayLocal){ recalcNid(); }
   actualizarLabels();
-  renderPagina('tmat');
   if(GAS_CONFIGURADO){
-    showLoader('🔄 Sincronizando…');
+    showLoader('🔄 Cargando datos…');
     try{
       const r = await fetch(GAS_URL+'?action=getAll');
       const data = await r.json();
       if(data && typeof data === 'object'){
-        if(Array.isArray(data.personal)) DB.personal = data.personal;
+        if(Array.isArray(data.personal))    DB.personal    = data.personal;
         if(Array.isArray(data.incidencias)) DB.incidencias = data.incidencias;
-        if(Array.isArray(data.eventual)) DB.eventual = data.eventual;
+        if(Array.isArray(data.eventual))    DB.eventual    = data.eventual;
+        if(Array.isArray(data.textra))      DB.textra      = data.textra;
         recalcNid();
         guardarLocal();
       }
-    }catch(e){ console.error('GAS error:',e); }
+    } catch(e){
+      // Sin conexión — usar caché local
+      cargarLocal(); recalcNid();
+    }
     hideLoader();
-    Promise.resolve().then(function(){ renderPagina('tmat'); });
+  } else {
+    cargarLocal(); recalcNid();
   }
+  renderPagina('tmat');
 }
 
 init();
 </script>
 </body>
 </html>
-

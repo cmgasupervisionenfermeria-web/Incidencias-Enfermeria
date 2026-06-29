@@ -1655,8 +1655,21 @@ function apiCall(params){
 
 async function syncGAS(){
   if(!GAS_CONFIGURADO){ toast('⚠ GAS no configurado'); return; }
-  showLoader('🔄 Sincronizando con Google Sheets…');
+  showLoader('⬆ Subiendo datos locales a Sheets…');
   try{
+    // PASO 1: Subir todo lo local a Sheets
+    if(DB.personal.length > 0)
+      await apiCall({action:'savePersonal', data:DB.personal});
+    for(const i of DB.incidencias){
+      await apiCall({action:'saveIncidencia', record:{noEmp:i.noEmp, fecha:i.fecha, incidencia:i.incidencia, observacion:i.observacion||''}});
+    }
+    if(DB.eventual.length > 0)
+      await apiCall({action:'saveEventual', data:DB.eventual});
+    if(DB.textra.length > 0)
+      await apiCall({action:'saveTextra', data:DB.textra});
+
+    // PASO 2: Descargar Sheets (ahora tiene todo)
+    showLoader('⬇ Descargando datos de Sheets…');
     const data = await apiCall({action:'getAll'});
     if(data && typeof data === 'object'){
       const pArr = Array.isArray(data.personal)    ? data.personal    : [];
@@ -1664,37 +1677,24 @@ async function syncGAS(){
       const eArr = Array.isArray(data.eventual)    ? data.eventual    : [];
       const tArr = Array.isArray(data.textra)      ? data.textra      : [];
 
-      // Personal: usar Sheets si tiene datos, si no conservar local
       if(pArr.length > 0){
         DB.personal = pArr.map(function(p){
-          if(p.fechaIngreso && p.fechaIngreso.length > 10) p.fechaIngreso = p.fechaIngreso.substring(0,10);
-          if(p.finRotacion  && p.finRotacion.length  > 10) p.finRotacion  = p.finRotacion.substring(0,10);
+          if(p.fechaIngreso && String(p.fechaIngreso).length > 10) p.fechaIngreso = String(p.fechaIngreso).substring(0,10);
+          if(p.finRotacion  && String(p.finRotacion).length  > 10) p.finRotacion  = String(p.finRotacion).substring(0,10);
           return p;
         });
       }
-      // Incidencias/Eventual/Textra: fusionar — conservar local si Sheets tiene menos
-      if(iArr.length >= DB.incidencias.length) DB.incidencias = iArr;
-      if(eArr.length >= DB.eventual.length)    DB.eventual    = eArr;
-      if(tArr.length >= DB.textra.length)      DB.textra      = tArr;
+      if(iArr.length > 0) DB.incidencias = iArr;
+      if(eArr.length > 0) DB.eventual    = eArr;
+      if(tArr.length > 0) DB.textra      = tArr;
 
       recalcNid();
       guardarLocal();
-
-      // Si Sheets tiene menos datos que local → subir los datos locales a Sheets
-      if(iArr.length < DB.incidencias.length){
-        toast('⬆ Subiendo incidencias a Sheets…');
-        for(const i of DB.incidencias){
-          await apiCall({action:'saveIncidencia',record:{noEmp:i.noEmp,fecha:i.fecha,incidencia:i.incidencia,observacion:i.observacion||''}});
-        }
-      }
-      if(eArr.length < DB.eventual.length)
-        await apiCall({action:'saveEventual',data:DB.eventual});
-      if(tArr.length < DB.textra.length)
-        await apiCall({action:'saveTextra',data:DB.textra});
-
       toast('✓ Sincronizado — Personal:'+DB.personal.length+' Inc:'+DB.incidencias.length);
     }
-  }catch(e){ toast('⚠ Error al sincronizar: '+e.message); }
+  } catch(e){
+    toast('⚠ Error: '+e.message);
+  }
   hideLoader();
   renderPagina(paginaActual);
 }

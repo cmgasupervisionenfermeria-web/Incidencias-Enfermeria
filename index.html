@@ -1662,7 +1662,7 @@ async function syncGAS(){
   try{
     const r = await fetch(GAS_URL+'?action=getAll');
     const data = await r.json();
-    if(data && typeof data === 'object'){
+    if(data && typeof data==='object'){
       if(Array.isArray(data.personal) && data.personal.length>0){
         DB.personal = data.personal.map(function(p){
           if(p.fechaIngreso && String(p.fechaIngreso).length>10) p.fechaIngreso=String(p.fechaIngreso).substring(0,10);
@@ -1670,39 +1670,91 @@ async function syncGAS(){
           return p;
         });
       }
-      if(Array.isArray(data.incidencias) && data.incidencias.length>0) DB.incidencias = data.incidencias;
-      if(Array.isArray(data.eventual)    && data.eventual.length>0)    DB.eventual    = data.eventual;
-      if(Array.isArray(data.textra)      && data.textra.length>0)      DB.textra      = data.textra;
+      if(Array.isArray(data.incidencias)) DB.incidencias = data.incidencias;
+      if(Array.isArray(data.eventual))    DB.eventual    = data.eventual;
+      if(Array.isArray(data.textra))      DB.textra      = data.textra;
       recalcNid(); guardarLocal();
       toast('✓ Sincronizado');
     }
-  } catch(e){ toast('⚠ Error al sincronizar: '+e.message); }
+  } catch(e){ toast('⚠ Error: '+e.message); }
   hideLoader();
   renderPagina(paginaActual);
 }
 
 async function syncPersonal(){
   if(!GAS_CONFIGURADO) return;
-  try{ await apiCall({action:'savePersonal', data:DB.personal}); }catch(e){}
+  try{
+    const params = new URLSearchParams({action:'savePersonal', data:JSON.stringify(DB.personal)});
+    fetch(GAS_URL+'?'+params.toString()).catch(function(){});
+  }catch(e){}
 }
 
 async function syncIncidencia(noEmp, fecha, inc, obs){
   if(!GAS_CONFIGURADO) return;
-  try{ await apiCall({action:'saveIncidencia', record:{noEmp:noEmp,fecha:fecha,incidencia:inc,observacion:obs||''}}); }catch(e){}
+  try{
+    const params = new URLSearchParams({action:'saveIncidencia', record:JSON.stringify({noEmp:noEmp,fecha:fecha,incidencia:inc,observacion:obs||''})});
+    fetch(GAS_URL+'?'+params.toString()).catch(function(){});
+  }catch(e){}
 }
 
 async function syncEventual(){
   if(!GAS_CONFIGURADO) return;
-  try{ await apiCall({action:'saveEventual', data:DB.eventual}); }catch(e){}
+  try{
+    const params = new URLSearchParams({action:'saveEventual', data:JSON.stringify(DB.eventual)});
+    fetch(GAS_URL+'?'+params.toString()).catch(function(){});
+  }catch(e){}
 }
 
 async function syncTextra(){
   if(!GAS_CONFIGURADO) return;
-  try{ await apiCall({action:'saveTextra', data:DB.textra}); }catch(e){}
+  try{
+    const params = new URLSearchParams({action:'saveTextra', data:JSON.stringify(DB.textra)});
+    fetch(GAS_URL+'?'+params.toString()).catch(function(){});
+  }catch(e){}
 }
 
 // ════════════════════════════════════════
-// INIT — carga local primero, luego Sheets
+// PIN
+// ════════════════════════════════════════
+function requirePin(cb){
+  if(pinOK){ cb(); return; }
+  pinCB = cb;
+  document.getElementById('pin-error').style.display='none';
+  document.getElementById('pinInput').value='';
+  abrirModal('modal-pin');
+  setTimeout(function(){ document.getElementById('pinInput').focus(); }, 100);
+}
+function abrirPin(){ pinOK=false; requirePin(function(){}); }
+function verificarPin(){
+  const val = document.getElementById('pinInput').value;
+  if(val === PIN_CORRECTO){
+    pinOK = true;
+    cerrarModal('modal-pin');
+    if(pinCB){ pinCB(); pinCB=null; }
+  } else {
+    document.getElementById('pin-error').style.display='block';
+  }
+}
+
+// ════════════════════════════════════════
+// UI HELPERS
+// ════════════════════════════════════════
+function abrirModal(id){ document.getElementById(id).classList.add('open'); }
+function cerrarModal(id){ document.getElementById(id).classList.remove('open'); }
+function showLoader(txt){ document.getElementById('loader-txt').textContent=txt||'Cargando...'; document.getElementById('loader').classList.add('open'); }
+function hideLoader(){ document.getElementById('loader').classList.remove('open'); }
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(function(){ el.classList.remove('show'); }, 3000);
+}
+
+document.querySelectorAll('.modal-overlay').forEach(function(o){
+  o.addEventListener('click', function(e){ if(e.target===o) cerrarModal(o.id); });
+});
+
+// ════════════════════════════════════════
+// INIT
 // ════════════════════════════════════════
 async function init(){
   cargarLocal();
@@ -1733,3 +1785,4 @@ init();
 </script>
 </body>
 </html>
+

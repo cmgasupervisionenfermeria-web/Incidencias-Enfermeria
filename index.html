@@ -1716,6 +1716,111 @@ async function syncTextra(){
 // ════════════════════════════════════════
 // PIN
 // ════════════════════════════════════════
+// ════════════════════════════════════════
+// TIEMPO EXTRA
+// ════════════════════════════════════════
+function abrirModalTextra(id){
+  const tx = id ? DB.textra.find(function(t){ return t.id===id; }) : null;
+  const pOpts = DB.personal
+    .filter(function(p){ return p.tipo!=='pasante'&&p.turno!=='eventual'; })
+    .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); })
+    .map(function(p){
+      return '<option value="'+p.noEmp+'"'+(tx&&tx.noEmp===p.noEmp?' selected':'')+'>'+p.nombre+' ('+(TURNOS_LABEL[p.turno]||p.turno)+')</option>';
+    }).join('');
+  document.getElementById('modal-title').textContent = tx?'Editar tiempo extra':'Registrar tiempo extra';
+  const turnosCubiOpts = TURNOS_CAT.map(function(t){
+    const sel = tx && tx.turnoCubierto===t ? ' selected' : '';
+    return '<option value="'+t+'"'+sel+'>'+TURNOS_LABEL[t]+'</option>';
+  }).join('');
+
+  document.getElementById('modal-body').innerHTML = '<div class="form-row"><label class="form-label">Empleado *</label>'
+    +'<select id="tx-emp" class="form-select"><option value="">— Selecciona —</option>'+pOpts+'</select></div>'
+    +'<div class="form-row-2"><div class="form-row"><label class="form-label">Fecha *</label>'
+    +'<input id="tx-fecha" type="date" class="form-input" value="'+(tx?tx.fecha:'')+'"></div>'
+    +'<div class="form-row"><label class="form-label">Horas *</label>'
+    +'<input id="tx-horas" type="number" min="0.5" max="24" step="0.5" class="form-input" value="'+(tx?tx.horas:'')+'" placeholder="Ej. 4"></div></div>'
+    +'<div class="form-row"><label class="form-label">Turno que cubrió *</label>'
+    +'<select id="tx-turno-cub" class="form-select"><option value="">— Selecciona turno cubierto —</option>'+turnosCubiOpts+'</select></div>'
+    +'<div class="form-row"><label class="form-label">Motivo *</label>'
+    +'<textarea id="tx-motivo" class="form-textarea" rows="2">'+(tx?tx.motivo:'')+'</textarea></div>';
+  const ft = document.getElementById('modal-footer');
+  ft.innerHTML='';
+  const c=document.createElement('button'); c.className='btn btn-ghost'; c.textContent='Cancelar';
+  c.onclick=function(){ cerrarModal('modal-main'); }; ft.appendChild(c);
+  if(tx){ const d=document.createElement('button'); d.className='btn btn-danger'; d.textContent='Eliminar';
+    (function(xid){ d.onclick=function(){ eliminarTextra(xid); }; })(tx.id); ft.appendChild(d); }
+  const s=document.createElement('button'); s.className='btn btn-primary'; s.textContent='Guardar';
+  (function(xid){ s.onclick=function(){ guardarTextra(xid?String(xid):'null'); }; })(tx?tx.id:null);
+  ft.appendChild(s);
+  abrirModal('modal-main');
+}
+
+function guardarTextra(idEditar){
+  const noEmp=document.getElementById('tx-emp').value;
+  const fecha=document.getElementById('tx-fecha').value;
+  const horas=parseFloat(document.getElementById('tx-horas').value);
+  const motivo=document.getElementById('tx-motivo').value.trim();
+  if(!noEmp||!fecha||!horas||!motivo){ toast('Completa todos los campos'); return; }
+  const p=DB.personal.find(function(x){ return x.noEmp===noEmp; });
+  const turnoCubierto=document.getElementById('tx-turno-cub').value;
+  if(!turnoCubierto){ toast('Selecciona el turno que cubrió'); return; }
+  const reg={noEmp,nombre:p?p.nombre:'',turno:p?p.turno:'',turnoCubierto,fecha,horas,motivo};
+  if(idEditar&&idEditar!=='null'){
+    const idx=DB.textra.findIndex(function(t){ return t.id===Number(idEditar); });
+    if(idx>=0){ reg.id=Number(idEditar); DB.textra[idx]=reg; }
+  } else { reg.id=nid++; DB.textra.push(reg); }
+  guardarLocal(); cerrarModal('modal-main'); toast('✓ Tiempo extra guardado');
+  renderTextra(); if(GAS_CONFIGURADO) syncTextra();
+}
+
+function eliminarTextra(id){
+  if(!confirm('¿Eliminar?')) return;
+  DB.textra=DB.textra.filter(function(t){ return t.id!==id; });
+  guardarLocal(); cerrarModal('modal-main'); renderTextra();
+  if(GAS_CONFIGURADO) syncTextra();
+}
+
+function renderTextra(){
+  if(!document.getElementById('textra-mes')) return;
+  const mes=parseInt(document.getElementById('textra-mes').value);
+  const anio=parseInt(document.getElementById('textra-anio').value);
+  const ft=document.getElementById('textra-turno').value;
+  const lista=DB.textra.filter(function(t){
+    const d=new Date(t.fecha+'T12:00:00');
+    return d.getMonth()===mes&&d.getFullYear()===anio&&(!ft||t.turno===ft);
+  }).sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+  const tot=lista.reduce(function(s,t){ return s+(parseFloat(t.horas)||0); },0);
+  document.getElementById('textra-count').textContent=lista.length+' registros';
+  document.getElementById('textra-total').textContent=tot>0?'⏱ '+tot+' hrs total':'';
+  const tb=document.getElementById('textra-tbody');
+  if(!lista.length){ tb.innerHTML='<tr><td colspan="7" class="empty-msg">Sin registros de tiempo extra</td></tr>'; return; }
+  tb.innerHTML=lista.map(function(t){
+    return '<tr><td><span class="td-emp">'+t.noEmp+'</span></td>'
+      +'<td style="font-weight:600">'+t.nombre+'</td>'
+      +'<td><span class="turno-badge" title="Empleado: '+(TURNOS_LABEL[t.turno]||t.turno)+'">'+(TURNOS_LABEL[t.turnoCubierto]||t.turnoCubierto||TURNOS_LABEL[t.turno]||t.turno)+'</span></td>'
+      +'<td>'+t.fecha+'</td>'
+      +'<td style="text-align:center;font-weight:700;color:var(--az)">'+t.horas+' h</td>'
+      +'<td style="color:var(--txt2)">'+t.motivo+'</td>'
+      +'<td><button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" '
+      +'onclick="requirePin(function(){abrirModalTextra('+t.id+')})">✏</button></td></tr>';
+  }).join('');
+}
+
+function exportarCSVTextra(){
+  if(!document.getElementById('textra-mes')) return;
+  const mes=parseInt(document.getElementById('textra-mes').value);
+  const anio=parseInt(document.getElementById('textra-anio').value);
+  const ft=document.getElementById('textra-turno').value;
+  const lista=DB.textra.filter(function(t){
+    const d=new Date(t.fecha+'T12:00:00');
+    return d.getMonth()===mes&&d.getFullYear()===anio&&(!ft||t.turno===ft);
+  });
+  let csv='No.Emp,Nombre,Turno,Fecha,Horas,Motivo\n';
+  lista.forEach(function(t){ csv+=[t.noEmp,'"'+t.nombre+'"',(TURNOS_LABEL[t.turnoCubierto]||t.turnoCubierto||TURNOS_LABEL[t.turno]||t.turno),t.fecha,t.horas,'"'+t.motivo+'"'].join(',')+'\n';
+  });
+  descargarCSV(csv,'TiempoExtra_'+MESES[mes]+'_'+anio);
+}
+
 function requirePin(cb){
   if(pinOK){ cb(); return; }
   pinCB = cb;

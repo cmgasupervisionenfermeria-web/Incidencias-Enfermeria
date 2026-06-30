@@ -333,35 +333,53 @@ async function cargarDatos(){
   try{
     const data = await gasGet({action:'getAll'});
     if(data && typeof data==='object'){
-      // Normalizar noEmp a string en todas las colecciones
+      // Función para limpiar fecha ISO a YYYY-MM-DD
+      const limpFecha = v => v ? String(v).substring(0,10) : '';
+      // Función para limpiar string
+      const str = v => v!==null&&v!==undefined ? String(v) : '';
+
       if(Array.isArray(data.personal) && data.personal.length>0){
-        DB.personal = data.personal.map(p=>{
-          p.noEmp=String(p.noEmp||''); p.id=String(p.id||'');
-          // Limpiar fechas ISO
-          ['fechaIngreso','finRotacion'].forEach(f=>{if(p[f]&&String(p[f]).length>10)p[f]=String(p[f]).substring(0,10);});
-          return p;
-        });
+        DB.personal = data.personal.map(p=>({
+          id: str(p.id),
+          noEmp: str(p.noEmp),
+          nombre: str(p.nombre),
+          turno: str(p.turno),
+          puesto: str(p.puesto),
+          fechaIngreso: limpFecha(p.fechaIngreso),
+          tipo: str(p.tipo)||'base',
+          finRotacion: limpFecha(p.finRotacion)
+        }));
       }
       if(Array.isArray(data.incidencias)){
-        DB.incidencias = data.incidencias.map(i=>{
-          i.noEmp=String(i.noEmp||''); i.id=String(i.id||'');
-          if(i.fecha&&String(i.fecha).length>10)i.fecha=String(i.fecha).substring(0,10);
-          return i;
-        });
+        DB.incidencias = data.incidencias.map(i=>({
+          id: str(i.id),
+          noEmp: str(i.noEmp),
+          fecha: limpFecha(i.fecha),
+          incidencia: str(i.incidencia),
+          observacion: str(i.observacion)
+        }));
       }
       if(Array.isArray(data.eventual)){
-        DB.eventual = data.eventual.map(e=>{
-          e.id=String(e.id||'');
-          if(e.fecha&&String(e.fecha).length>10)e.fecha=String(e.fecha).substring(0,10);
-          return e;
-        });
+        DB.eventual = data.eventual.map(e=>({
+          id: str(e.id),
+          nombre: str(e.nombre),
+          fecha: limpFecha(e.fecha),
+          area: str(e.area),
+          incidenciaCubierta: str(e.incidenciaCubierta),
+          observacion: str(e.observacion)
+        }));
       }
       if(Array.isArray(data.textra)){
-        DB.textra = data.textra.map(t=>{
-          t.noEmp=String(t.noEmp||''); t.id=String(t.id||'');
-          if(t.fecha&&String(t.fecha).length>10)t.fecha=String(t.fecha).substring(0,10);
-          return t;
-        });
+        DB.textra = data.textra.map(t=>({
+          id: str(t.id),
+          noEmp: str(t.noEmp),
+          nombre: str(t.nombre),
+          turno: str(t.turno),
+          turnoCubierto: str(t.turnoCubierto),
+          fecha: limpFecha(t.fecha),
+          horas: parseFloat(t.horas)||0,
+          motivo: str(t.motivo)
+        }));
       }
       recalcNid(); guardarLocal();
     }
@@ -1006,4 +1024,3 @@ document.addEventListener('DOMContentLoaded', cargarDatos);
 </script>
 </body>
 </html>
-

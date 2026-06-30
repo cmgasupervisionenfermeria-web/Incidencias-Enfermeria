@@ -1729,6 +1729,7 @@ document.addEventListener('DOMContentLoaded', function(){
 // INIT
 // ════════════════════════════════════════
 async function init(){
+  // Mostrar lo que hay en caché local inmediatamente
   cargarLocal();
   recalcNid();
   actualizarLabels();
@@ -1736,19 +1737,36 @@ async function init(){
 
   if(!GAS_CONFIGURADO) return;
 
+  // Descargar Sheets en segundo plano
   showLoader('🔄 Sincronizando con Google Sheets…');
   try{
     const r = await fetch(GAS_URL+'?action=getAll');
     const data = await r.json();
     if(data && typeof data === 'object'){
-      // Solo reemplazar si Sheets realmente trae datos — nunca con array vacío
-      if(Array.isArray(data.personal)    && data.personal.length    > 0) DB.personal    = limpiarFechasPersonal(data.personal);
-      if(Array.isArray(data.incidencias) && data.incidencias.length > 0) DB.incidencias = data.incidencias;
-      if(Array.isArray(data.eventual)    && data.eventual.length    > 0) DB.eventual    = data.eventual;
-      if(Array.isArray(data.textra)      && data.textra.length      > 0) DB.textra      = data.textra;
-      recalcNid();
-      guardarLocal();
-      renderPagina(paginaActual);
+      let actualizado = false;
+      if(Array.isArray(data.personal) && data.personal.length > 0){
+        DB.personal = limpiarFechasPersonal(data.personal);
+        actualizado = true;
+      }
+      if(Array.isArray(data.incidencias) && data.incidencias.length > 0){
+        DB.incidencias = data.incidencias;
+        actualizado = true;
+      }
+      if(Array.isArray(data.eventual) && data.eventual.length > 0){
+        DB.eventual = data.eventual;
+        actualizado = true;
+      }
+      if(Array.isArray(data.textra) && data.textra.length > 0){
+        DB.textra = data.textra;
+        actualizado = true;
+      }
+      if(actualizado){
+        recalcNid();
+        guardarLocal();
+        // Siempre re-renderizar después de cargar Sheets
+        actualizarLabels();
+        renderPagina('tmat');
+      }
     }
   } catch(e){ console.error('GAS init error:', e); }
   hideLoader();

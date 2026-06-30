@@ -187,7 +187,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <button class="nav-tab" onclick="showPage('textra',this)">⏱ Tiempo Extra</button>
   <div class="nav-right">
     <button class="btn-pin" onclick="abrirPin()">🔒 PIN</button>
-    <button class="btn-sync" onclick="syncGAS()">↺ Sync</button>
   </div>
 </nav>
 
@@ -1477,26 +1476,6 @@ function limpiarFechasPersonal(arr){
     if(p.finRotacion && String(p.finRotacion).length > 10) p.finRotacion = String(p.finRotacion).substring(0,10);
     return p;
   });
-}
-
-async function syncGAS(){
-  if(!GAS_CONFIGURADO){ toast('⚠ GAS no configurado'); return; }
-  showLoader('🔄 Sincronizando…');
-  try{
-    const r = await fetch(GAS_URL+'?action=getAll');
-    const data = await r.json();
-    if(data && typeof data === 'object'){
-      if(Array.isArray(data.personal) && data.personal.length > 0) DB.personal = limpiarFechasPersonal(data.personal);
-      if(Array.isArray(data.incidencias)) DB.incidencias = data.incidencias;
-      if(Array.isArray(data.eventual)) DB.eventual = data.eventual;
-      if(Array.isArray(data.textra)) DB.textra = data.textra;
-      recalcNid();
-      guardarLocal();
-      toast('✓ Sincronizado');
-    }
-  } catch(e){ toast('⚠ Error al sincronizar'); console.error(e); }
-  hideLoader();
-  renderPagina(paginaActual);
 }
 
 async function syncPersonal(){

@@ -1190,7 +1190,10 @@ function guardarPersonal(noEmpEditar){
   cerrarModal('modal-main');
   toast('✓ Empleado guardado');
   renderPagina(paginaActual);
-  if(GAS_CONFIGURADO) syncPersonal();
+  if(GAS_CONFIGURADO){
+    const pGuardado = DB.personal.find(function(p){ return p.noEmp === noEmp; });
+    if(pGuardado) syncPersonalOne(pGuardado);
+  }
 }
 
 function editarPersonal(noEmp){ abrirModalPersonal(noEmp, null); }
@@ -1203,7 +1206,7 @@ function eliminarPersonal(noEmp){
   cerrarModal('modal-main');
   toast('Empleado eliminado');
   renderPagina(paginaActual);
-  if(GAS_CONFIGURADO) syncPersonal();
+  if(GAS_CONFIGURADO) syncPersonalDelete(noEmp);
 }
 
 // ════════════════════════════════════════
@@ -1245,7 +1248,12 @@ function guardarEventual(idEditar){
   cerrarModal('modal-main');
   toast('✓ Eventual guardado');
   renderEventual();
-  if(GAS_CONFIGURADO) syncEventual();
+  if(GAS_CONFIGURADO){
+    const evGuardado = DB.eventual[DB.eventual.length-1];
+    const targetId = (idEditar && idEditar !== 'null') ? Number(idEditar) : (evGuardado ? evGuardado.id : null);
+    const reg = DB.eventual.find(function(e){ return e.id === targetId; });
+    if(reg) syncEventualOne(reg);
+  }
 }
 
 function eliminarEventual(id){
@@ -1254,7 +1262,7 @@ function eliminarEventual(id){
   guardarLocal();
   cerrarModal('modal-main');
   renderEventual();
-  if(GAS_CONFIGURADO) syncEventual();
+  if(GAS_CONFIGURADO) syncEventualDelete(id);
 }
 
 function renderEventual(){
@@ -1478,37 +1486,69 @@ function limpiarFechasPersonal(arr){
   });
 }
 
-async function syncPersonal(){
+async function syncPersonalOne(persona){
+  if(!GAS_CONFIGURADO) return;
+  showLoader('💾 Guardando…');
+  try{
+    const params = new URLSearchParams({action:'savePersonalOne', record: JSON.stringify(persona)});
+    await fetch(GAS_URL+'?'+params.toString());
+  }catch(e){ console.error('syncPersonalOne:',e); }
+  hideLoader();
+}
+
+async function syncPersonalDelete(noEmp){
   if(!GAS_CONFIGURADO) return;
   try{
-    const params = new URLSearchParams({action:'savePersonal', data: JSON.stringify(DB.personal)});
+    const params = new URLSearchParams({action:'deletePersonal', noEmp: noEmp});
     await fetch(GAS_URL+'?'+params.toString());
-  }catch(e){ console.error('syncPersonal:',e); }
+  }catch(e){ console.error('syncPersonalDelete:',e); }
 }
 
 async function syncIncidencia(noEmp, fecha, inc, obs){
   if(!GAS_CONFIGURADO) return;
+  showLoader('💾 Guardando…');
   try{
     const record = {noEmp: noEmp, fecha: fecha, incidencia: inc, observacion: obs||''};
     const params = new URLSearchParams({action:'saveIncidencia', record: JSON.stringify(record)});
     await fetch(GAS_URL+'?'+params.toString());
   }catch(e){ console.error('syncIncidencia:',e); }
+  hideLoader();
 }
 
-async function syncEventual(){
+async function syncEventualOne(ev){
   if(!GAS_CONFIGURADO) return;
+  showLoader('💾 Guardando…');
   try{
-    const params = new URLSearchParams({action:'saveEventual', data: JSON.stringify(DB.eventual)});
+    const params = new URLSearchParams({action:'saveEventualOne', record: JSON.stringify(ev)});
     await fetch(GAS_URL+'?'+params.toString());
-  }catch(e){ console.error('syncEventual:',e); }
+  }catch(e){ console.error('syncEventualOne:',e); }
+  hideLoader();
 }
 
-async function syncTextra(){
+async function syncEventualDelete(id){
   if(!GAS_CONFIGURADO) return;
   try{
-    const params = new URLSearchParams({action:'saveTextra', data: JSON.stringify(DB.textra)});
+    const params = new URLSearchParams({action:'deleteEventual', id: id});
     await fetch(GAS_URL+'?'+params.toString());
-  }catch(e){ console.error('syncTextra:',e); }
+  }catch(e){ console.error('syncEventualDelete:',e); }
+}
+
+async function syncTextraOne(tx){
+  if(!GAS_CONFIGURADO) return;
+  showLoader('💾 Guardando…');
+  try{
+    const params = new URLSearchParams({action:'saveTextraOne', record: JSON.stringify(tx)});
+    await fetch(GAS_URL+'?'+params.toString());
+  }catch(e){ console.error('syncTextraOne:',e); }
+  hideLoader();
+}
+
+async function syncTextraDelete(id){
+  if(!GAS_CONFIGURADO) return;
+  try{
+    const params = new URLSearchParams({action:'deleteTextra', id: id});
+    await fetch(GAS_URL+'?'+params.toString());
+  }catch(e){ console.error('syncTextraDelete:',e); }
 }
 
 // ════════════════════════════════════════
@@ -1582,7 +1622,11 @@ function guardarTextra(idEditar){
   cerrarModal('modal-main');
   toast('✓ Tiempo extra guardado');
   renderTextra();
-  if(GAS_CONFIGURADO) syncTextra();
+  if(GAS_CONFIGURADO){
+    const targetId = (idEditar && idEditar !== 'null') ? Number(idEditar) : reg.id;
+    const regGuardado = DB.textra.find(function(t){ return t.id === targetId; });
+    if(regGuardado) syncTextraOne(regGuardado);
+  }
 }
 
 function eliminarTextra(id){
@@ -1591,7 +1635,7 @@ function eliminarTextra(id){
   guardarLocal();
   cerrarModal('modal-main');
   renderTextra();
-  if(GAS_CONFIGURADO) syncTextra();
+  if(GAS_CONFIGURADO) syncTextraDelete(id);
 }
 
 function renderTextra(){
@@ -1692,6 +1736,7 @@ async function init(){
 
   if(!GAS_CONFIGURADO) return;
 
+  showLoader('🔄 Sincronizando con Google Sheets…');
   try{
     const r = await fetch(GAS_URL+'?action=getAll');
     const data = await r.json();
@@ -1706,6 +1751,7 @@ async function init(){
       renderPagina(paginaActual);
     }
   } catch(e){ console.error('GAS init error:', e); }
+  hideLoader();
 }
 
 document.addEventListener('DOMContentLoaded', init);

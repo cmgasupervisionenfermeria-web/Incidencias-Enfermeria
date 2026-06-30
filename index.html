@@ -321,70 +321,33 @@ function recalcNid(){
 // CARGA INICIAL — patrón idéntico al Censo Hospitalario
 // ══════════════════════════════════════════════════════════
 async function cargarDatos(){
-  const hayLocal = cargarLocal();
-  if(hayLocal){ recalcNid(); actualizarLabels(); renderPag(PAG); }
+  // Cargar caché local primero
+  try{ cargarLocal(); recalcNid(); }catch(e){}
+  actualizarLabels();
+  renderPag(PAG);
 
-  if(!GAS || GAS==='https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec'){
-    if(!hayLocal){ actualizarLabels(); renderPag(PAG); }
-    return;
-  }
-
+  // Descargar de Sheets
   showLdr('🔄 Sincronizando con Google Sheets…');
   try{
-    const data = await gasGet({action:'getAll'});
-    if(data && typeof data==='object'){
-      // Función para limpiar fecha ISO a YYYY-MM-DD
-      const limpFecha = v => v ? String(v).substring(0,10) : '';
-      // Función para limpiar string
-      const str = v => v!==null&&v!==undefined ? String(v) : '';
-
-      if(Array.isArray(data.personal) && data.personal.length>0){
-        DB.personal = data.personal.map(p=>({
-          id: str(p.id),
-          noEmp: str(p.noEmp),
-          nombre: str(p.nombre),
-          turno: str(p.turno),
-          puesto: str(p.puesto),
-          fechaIngreso: limpFecha(p.fechaIngreso),
-          tipo: str(p.tipo)||'base',
-          finRotacion: limpFecha(p.finRotacion)
-        }));
-      }
-      if(Array.isArray(data.incidencias)){
-        DB.incidencias = data.incidencias.map(i=>({
-          id: str(i.id),
-          noEmp: str(i.noEmp),
-          fecha: limpFecha(i.fecha),
-          incidencia: str(i.incidencia),
-          observacion: str(i.observacion)
-        }));
-      }
-      if(Array.isArray(data.eventual)){
-        DB.eventual = data.eventual.map(e=>({
-          id: str(e.id),
-          nombre: str(e.nombre),
-          fecha: limpFecha(e.fecha),
-          area: str(e.area),
-          incidenciaCubierta: str(e.incidenciaCubierta),
-          observacion: str(e.observacion)
-        }));
-      }
-      if(Array.isArray(data.textra)){
-        DB.textra = data.textra.map(t=>({
-          id: str(t.id),
-          noEmp: str(t.noEmp),
-          nombre: str(t.nombre),
-          turno: str(t.turno),
-          turnoCubierto: str(t.turnoCubierto),
-          fecha: limpFecha(t.fecha),
-          horas: parseFloat(t.horas)||0,
-          motivo: str(t.motivo)
-        }));
-      }
-      recalcNid(); guardarLocal();
+    const resp = await fetch(GAS+'?action=getAll');
+    const data = await resp.json();
+    const s = v=>(v!==null&&v!==undefined)?String(v):'';
+    const f = v=>v?String(v).substring(0,10):'';
+    if(Array.isArray(data.personal)&&data.personal.length>0){
+      DB.personal=data.personal.map(p=>({id:s(p.id),noEmp:s(p.noEmp),nombre:s(p.nombre),turno:s(p.turno),puesto:s(p.puesto),fechaIngreso:f(p.fechaIngreso),tipo:s(p.tipo)||'base',finRotacion:f(p.finRotacion)}));
     }
-  }catch(e){ console.error('GAS error:',e); }
-
+    if(Array.isArray(data.incidencias)){
+      DB.incidencias=data.incidencias.map(i=>({id:s(i.id),noEmp:s(i.noEmp),fecha:f(i.fecha),incidencia:s(i.incidencia),observacion:s(i.observacion)}));
+    }
+    if(Array.isArray(data.eventual)){
+      DB.eventual=data.eventual.map(e=>({id:s(e.id),nombre:s(e.nombre),fecha:f(e.fecha),area:s(e.area),incidenciaCubierta:s(e.incidenciaCubierta),observacion:s(e.observacion)}));
+    }
+    if(Array.isArray(data.textra)){
+      DB.textra=data.textra.map(t=>({id:s(t.id),noEmp:s(t.noEmp),nombre:s(t.nombre),turno:s(t.turno),turnoCubierto:s(t.turnoCubierto),fecha:f(t.fecha),horas:parseFloat(t.horas)||0,motivo:s(t.motivo)}));
+    }
+    recalcNid(); guardarLocal();
+    console.log('Sincronizado — personal:',DB.personal.length);
+  }catch(e){ console.error('Error GAS:',e); }
   hideLdr();
   actualizarLabels();
   renderPag(PAG);

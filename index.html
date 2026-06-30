@@ -324,7 +324,7 @@ async function cargarDatos(){
   const hayLocal = cargarLocal();
   if(hayLocal){ recalcNid(); actualizarLabels(); renderPag(PAG); }
 
-  if(!GAS || GAS==='PEGAR_URL_GAS_AQUI'){
+  if(!GAS || GAS==='https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec'){
     if(!hayLocal){ actualizarLabels(); renderPag(PAG); }
     return;
   }
@@ -377,38 +377,38 @@ async function cargarDatos(){
 // ══════════════════════════════════════════════════════════
 async function syncIncsBatch(registros){
   // Manda todas las incidencias en UNA sola petición — evita IDs duplicados
-  if(!GAS||GAS==='PEGAR_URL_GAS_AQUI'||!registros.length)return;
+  if(!GAS||GAS==='https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec'||!registros.length)return;
   try{
     await gasGet({action:'saveIncidencias', records:JSON.stringify(registros)});
   }catch(e){ console.error('syncIncsBatch:',e); }
 }
 
 async function syncInc(noEmp,fecha,inc,obs){
-  if(!GAS||GAS==='PEGAR_URL_GAS_AQUI')return;
+  if(!GAS||GAS==='https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec')return;
   try{ await gasGet({action:'saveIncidencia',noEmp,fecha,incidencia:inc||'',observacion:obs||''}); }catch(e){}
 }
 async function syncPersonal(rec){
-  if(!GAS||GAS==='PEGAR_URL_GAS_AQUI')return;
+  if(!GAS||GAS==='https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec')return;
   try{ await gasGet({action:'savePersonal',record:JSON.stringify(rec)}); }catch(e){}
 }
 async function syncDeletePersonal(noEmp){
-  if(!GAS||GAS==='PEGAR_URL_GAS_AQUI')return;
+  if(!GAS||GAS==='https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec')return;
   try{ await gasGet({action:'deletePersonal',noEmp}); }catch(e){}
 }
 async function syncEventual(rec){
-  if(!GAS||GAS==='PEGAR_URL_GAS_AQUI')return;
+  if(!GAS||GAS==='https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec')return;
   try{ await gasGet({action:'saveEventual',record:JSON.stringify(rec)}); }catch(e){}
 }
 async function syncDeleteEventual(id){
-  if(!GAS||GAS==='PEGAR_URL_GAS_AQUI')return;
+  if(!GAS||GAS==='https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec')return;
   try{ await gasGet({action:'deleteEventual',id}); }catch(e){}
 }
 async function syncTextra(rec){
-  if(!GAS||GAS==='PEGAR_URL_GAS_AQUI')return;
+  if(!GAS||GAS==='https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec')return;
   try{ await gasGet({action:'saveTextra',record:JSON.stringify(rec)}); }catch(e){}
 }
 async function syncDeleteTextra(id){
-  if(!GAS||GAS==='PEGAR_URL_GAS_AQUI')return;
+  if(!GAS||GAS==='https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec')return;
   try{ await gasGet({action:'deleteTextra',id}); }catch(e){}
 }
 

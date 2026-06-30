@@ -260,7 +260,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 // ══════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════
-const GAS = 'https://script.google.com/macros/s/AKfycbxIZ6S0ZCRGs_Wd_GGGqNVqJXxBPLz5BgQn7VKw-6ZLCW8bDGcLiO9OmH3m6t8oVrAVJA/exec';
+const GAS = 'PEGAR_URL_GAS_AQUI';
 const PIN  = 'CMGA1';
 const KEY  = 'inc_cmga_v1';
 
@@ -375,6 +375,14 @@ async function cargarDatos(){
 // ══════════════════════════════════════════════════════════
 // SYNC — guardar en segundo plano
 // ══════════════════════════════════════════════════════════
+async function syncIncsBatch(registros){
+  // Manda todas las incidencias en UNA sola petición — evita IDs duplicados
+  if(!GAS||GAS==='PEGAR_URL_GAS_AQUI'||!registros.length)return;
+  try{
+    await gasGet({action:'saveIncidencias', records:JSON.stringify(registros)});
+  }catch(e){ console.error('syncIncsBatch:',e); }
+}
+
 async function syncInc(noEmp,fecha,inc,obs){
   if(!GAS||GAS==='PEGAR_URL_GAS_AQUI')return;
   try{ await gasGet({action:'saveIncidencia',noEmp,fecha,incidencia:inc||'',observacion:obs||''}); }catch(e){}
@@ -627,15 +635,18 @@ function aplicarMulti(inc){
   if(!SEL.length)return;
   rPin(()=>{
     const turno=SEL[0].turno;
+    const batch=[];
     SEL.forEach(x=>{
       const v=validar(x.noEmp,x.fecha,inc);
       if(!v.ok&&v.tipo!=='advertencia')return;
       DB.incidencias=DB.incidencias.filter(i=>!(i.noEmp===x.noEmp&&i.fecha===x.fecha));
       if(inc)DB.incidencias.push({id:String(NID++),noEmp:x.noEmp,fecha:x.fecha,incidencia:inc,observacion:''});
-      syncInc(x.noEmp,x.fecha,inc,'');
+      batch.push({noEmp:x.noEmp,fecha:x.fecha,incidencia:inc||'',observacion:''});
     });
     guardarLocal();cancelarMulti();renderTurno(turno);
-    toast('✓ '+SEL.length+' celdas actualizadas');
+    // Una sola petición para todas — evita IDs duplicados
+    if(batch.length)syncIncsBatch(batch);
+    toast('✓ '+batch.length+' celdas actualizadas');
   });
 }
 document.addEventListener('keydown',e=>{
@@ -663,13 +674,14 @@ function copiarDia(){
         const de=document.getElementById('cd-de').value,a=document.getElementById('cd-a').value;
         if(de===a){toast('Selecciona días diferentes');return;}
         const personal=DB.personal.filter(p=>p.turno===PAG);
-        let n=0;
+        let n=0,batch=[];
         personal.forEach(p=>{
           if(DB.incidencias.some(i=>i.noEmp===p.noEmp&&i.fecha===a))return;
           const orig=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===de)[0];
-          if(orig){DB.incidencias.push({id:String(NID++),noEmp:p.noEmp,fecha:a,incidencia:orig.incidencia,observacion:''});n++;syncInc(p.noEmp,a,orig.incidencia,'');}
+          if(orig){DB.incidencias.push({id:String(NID++),noEmp:p.noEmp,fecha:a,incidencia:orig.incidencia,observacion:''});n++;batch.push({noEmp:p.noEmp,fecha:a,incidencia:orig.incidencia,observacion:''});}
         });
         guardarLocal();cerrarModal();cancelarMulti();renderTurno(PAG);
+        if(batch.length)syncIncsBatch(batch);
         toast('✓ '+n+' incidencias copiadas al '+a);
       },'Copiar'
     );
@@ -994,3 +1006,4 @@ document.addEventListener('DOMContentLoaded', cargarDatos);
 </script>
 </body>
 </html>
+

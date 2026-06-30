@@ -1745,11 +1745,17 @@ async function init(){
     if(data && typeof data === 'object'){
       let actualizado = false;
       if(Array.isArray(data.personal) && data.personal.length > 0){
-        DB.personal = limpiarFechasPersonal(data.personal);
+        DB.personal = limpiarFechasPersonal(data.personal).map(function(p){
+          p.noEmp = String(p.noEmp); p.id = String(p.id); return p;
+        });
         actualizado = true;
       }
       if(Array.isArray(data.incidencias) && data.incidencias.length > 0){
-        DB.incidencias = data.incidencias;
+        // Normalizar noEmp a string para que la comparación === funcione
+        DB.incidencias = data.incidencias.map(function(i){
+          i.noEmp = String(i.noEmp); i.id = String(i.id);
+          return i;
+        });
         actualizado = true;
       }
       if(Array.isArray(data.eventual) && data.eventual.length > 0){

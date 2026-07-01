@@ -915,6 +915,22 @@ document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click
 // ══════════════════════════════════════════════════════════
 // INICIO
 // ══════════════════════════════════════════════════════════
+// ── LOCAL STORAGE ────────────────────────────────────────
+function guardarLocal(){try{localStorage.setItem(KEY,JSON.stringify({db:DB,nid:NID}));}catch(e){}}
+function cargarLocal(){
+  try{
+    const r=localStorage.getItem(KEY);
+    if(!r)return false;
+    const p=JSON.parse(r);
+    if(p.db)DB=p.db; if(p.nid)NID=p.nid; return true;
+  }catch(e){return false;}
+}
+function recalcNid(){
+  let m=0;
+  ['personal','incidencias','eventual','textra'].forEach(k=>(DB[k]||[]).forEach(r=>{const n=Number(r.id)||0;if(n>m)m=n;}));
+  NID=m+1;
+}
+
 async function cargarDatos(){
   try{ cargarLocal(); recalcNid(); }catch(e){}
   actualizarLabels();

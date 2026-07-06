@@ -45,7 +45,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .nom{font-weight:600;color:var(--txt);font-size:11px}
 .pst{font-size:10px;color:var(--txt3)}
 .ing{font-size:10px;color:var(--txt3);white-space:nowrap}
-.obs-td{font-size:10px;color:var(--txt2);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.obs-td{font-size:10px;color:var(--txt2);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.obs-td:hover{background:var(--az3);color:var(--az2);text-decoration:underline}
 .ic{width:30px;min-width:26px;cursor:pointer;border-radius:4px;user-select:none;font-size:9px;font-weight:700;padding:3px 2px}
 .ic:hover{transform:scale(1.15);z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .ic-A{background:#DBEAFE;color:#1D4ED8}.ic-F{background:var(--rojo2);color:var(--rojo)}
@@ -100,6 +101,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .chip.active{background:var(--az);border-color:var(--az);color:#fff}
 .chips{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .tbadge{background:var(--az3);color:var(--az2);padding:1px 7px;border-radius:99px;font-size:10px;font-weight:600}
+.grp-hdr td{background:var(--az3)!important;padding:6px 10px!important;font-size:11px;font-weight:700;color:var(--az2);border-bottom:1px solid var(--az4)!important}
 </style>
 </head>
 <body>
@@ -287,7 +289,7 @@ INCS.forEach(i=>IMAP[i.c]=i);
 let Q = (()=>{const h=new Date(),d=h.getDate();return{mes:h.getMonth(),anio:h.getFullYear(),q:d>=11&&d<=25?1:2}})();
 let PAG = 'tmat', pinOK=false, pinCB=null, filtP='';
 let SEL=[], MULTI=false;
-let DB = {personal:[],incidencias:[],eventual:[],textra:[]};
+let DB = {personal:[],incidencias:[],eventual:[],textra:[],notas:[]};
 let NID = 1;
 
 // ══════════════════════════════════════════════════════════
@@ -324,6 +326,9 @@ async function syncTextra(rec) {
   guardarLocal(); apiCall({action:'saveTextra', record:JSON.stringify(rec)});
 }
 async function syncDeleteTextra(id) { apiCall({action:'deleteTextra', id:id}); }
+async function syncNota(noEmp,nota) {
+  guardarLocal(); apiCall({action:'saveNota', noEmp:noEmp, nota:nota||''});
+}
 
 // ══════════════════════════════════════════════════════════
 // FECHAS
@@ -448,8 +453,10 @@ function renderTurno(turno){
     const tM=pal.some(a=>a.tipo==='M'),tPs=pal.some(a=>a.tipo==='Ps');
     const rowC=tPs?'alerta-ps':tM?'alerta-row':'';
     const bgR=esPas?'background:rgba(99,102,241,.04);':'';
-    const obs=(DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.observacion&&dias.some(d=>d.fecha===i.fecha))||[]);
-    const obsT=obs.length?obs[obs.length-1].observacion:'';
+    const notaObj=DB.notas.filter(n=>n.noEmp===p.noEmp)[0];
+    const notaGen=notaObj?notaObj.nota:'';
+    const obsPeriodo=(DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.observacion&&dias.some(d=>d.fecha===i.fecha))||[]);
+    const obsT=notaGen||(obsPeriodo.length?obsPeriodo[obsPeriodo.length-1].observacion:'');
     const bM=tM?'<span class="ab ab-m">M×'+pal.filter(a=>a.tipo==='M')[0].val+'</span>':'';
     const bPs=tPs?'<span class="ab ab-ps">Ps×'+pal.filter(a=>a.tipo==='Ps')[0].val+'</span>':'';
     let celdas='';
@@ -467,7 +474,7 @@ function renderTurno(turno){
       +'<td class="tl"><span class="pst">'+p.puesto+'</span></td>'
       +'<td class="tl"><span class="ing">'+p.fechaIngreso+'</span></td>'
       +celdas
-      +'<td class="tl obs-td" title="'+obsT+'">'+obsT+'</td>'
+      +'<td class="tl obs-td" title="'+(obsT?obsT+' — ':'')+'Clic para anotar" data-noemp="'+p.noEmp+'" onclick="rPin(()=>abrirModalNota(\''+p.noEmp+'\'))">'+(obsT||'+ anotar')+'</td>'
       +'<td class="td-btn" data-emp="'+p.noEmp+'"></td></tr>';
   }
   let rows='',grAnt=0;
@@ -638,6 +645,28 @@ function _guardarInc(noEmp,fecha,turno,inc,obs){
 }
 
 // ══════════════════════════════════════════════════════════
+// ANOTACIÓN GENERAL (columna Observaciones)
+// ══════════════════════════════════════════════════════════
+function abrirModalNota(noEmp){
+  const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
+  const n=DB.notas.filter(x=>x.noEmp===noEmp)[0];
+  const html='<div class="fr"><label class="fl">Anotación / Observación</label>'
+    +'<textarea id="nota-tx" class="ft" rows="4" placeholder="Escribe aquí una observación general sobre este empleado...">'+(n?n.nota:'')+'</textarea></div>'
+    +'<div style="font-size:10px;color:var(--txt3)">Esta nota se muestra en la columna Observaciones para <b>'+(p?p.nombre:noEmp)+'</b> y se guarda hasta que la edites o la borres.</div>';
+  const extra = (n&&n.nota) ? [{lbl:'Borrar nota',cls:'btn-danger',fn:()=>{
+      DB.notas=DB.notas.filter(x=>x.noEmp!==noEmp);
+      guardarLocal();cerrarModal();renderPag(PAG);syncNota(noEmp,'');toast('Nota eliminada');
+    }}] : [];
+  abrirModal('📝 Anotación — '+(p?p.nombre:noEmp), html, ()=>{
+    const val=document.getElementById('nota-tx').value.trim();
+    const idx=DB.notas.findIndex(x=>x.noEmp===noEmp);
+    if(idx>=0){ if(val)DB.notas[idx].nota=val; else DB.notas.splice(idx,1); }
+    else if(val){ DB.notas.push({id:String(NID++),noEmp,nota:val}); }
+    guardarLocal();cerrarModal();renderPag(PAG);syncNota(noEmp,val);toast('✓ Nota guardada');
+  },'Guardar',extra);
+}
+
+// ══════════════════════════════════════════════════════════
 // VALIDACIONES
 // ══════════════════════════════════════════════════════════
 function validar(noEmp,fecha,inc){
@@ -699,6 +728,7 @@ function elimPersonal(noEmp){
   if(!confirm('¿Eliminar este empleado y todas sus incidencias?'))return;
   DB.personal=DB.personal.filter(p=>p.noEmp!==noEmp);
   DB.incidencias=DB.incidencias.filter(i=>i.noEmp!==noEmp);
+  DB.notas=DB.notas.filter(n=>n.noEmp!==noEmp);
   guardarLocal();cerrarModal();toast('Empleado eliminado');renderPag(PAG);syncDeletePersonal(noEmp);
 }
 
@@ -729,12 +759,29 @@ function elimEventual(id){
 }
 function renderEventual(){
   const dias=diasQ(Q.mes,Q.anio,Q.q),fechas=dias.map(d=>d.fecha);
-  const lista=DB.eventual.filter(e=>fechas.includes(e.fecha)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const lista=DB.eventual.filter(e=>fechas.includes(e.fecha));
   document.getElementById('cnt-ev').textContent=lista.length+' registros';
   const tb=document.getElementById('tbody-ev');
   if(!lista.length){tb.innerHTML='<tr><td colspan="6" class="empty">Sin eventuales en este período</td></tr>';return;}
-  tb.innerHTML=lista.map(e=>'<tr><td class="tl" style="font-weight:600">'+e.nombre+'</td><td class="tl">'+e.fecha+'</td><td class="tl">'+e.area+'</td><td class="tl">'+e.incidenciaCubierta+'</td><td class="tl" style="color:var(--txt3)">'+e.observacion+'</td>'
-    +'<td><button class="btn btn-ghost" style="font-size:10px;padding:3px 7px" onclick="rPin(()=>abrirModalEventual(DB.eventual.filter(x=>x.id===\''+e.id+'\')[0]))">✏</button></td></tr>').join('');
+  // Agrupar por nombre (normalizado) y ordenar alfabéticamente
+  const grupos={};
+  lista.forEach(e=>{
+    const key=(e.nombre||'').trim().toUpperCase();
+    if(!grupos[key])grupos[key]={nombre:e.nombre,items:[]};
+    grupos[key].items.push(e);
+  });
+  const claves=Object.keys(grupos).sort((a,b)=>a.localeCompare(b));
+  let html='';
+  claves.forEach(key=>{
+    const g=grupos[key];
+    g.items.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    html+='<tr class="grp-hdr"><td colspan="6">👤 '+g.nombre+' <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">— '+g.items.length+' registro'+(g.items.length!==1?'s':'')+' en este período</span></td></tr>';
+    g.items.forEach(e=>{
+      html+='<tr><td class="tl" style="padding-left:22px;color:var(--txt3)">↳</td><td class="tl">'+e.fecha+'</td><td class="tl">'+e.area+'</td><td class="tl">'+e.incidenciaCubierta+'</td><td class="tl" style="color:var(--txt3)">'+e.observacion+'</td>'
+        +'<td><button class="btn btn-ghost" style="font-size:10px;padding:3px 7px" onclick="rPin(()=>abrirModalEventual(DB.eventual.filter(x=>x.id===\''+e.id+'\')[0]))">✏</button></td></tr>';
+    });
+  });
+  tb.innerHTML=html;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -922,12 +969,12 @@ function cargarLocal(){
     const r=localStorage.getItem(KEY);
     if(!r)return false;
     const p=JSON.parse(r);
-    if(p.db)DB=p.db; if(p.nid)NID=p.nid; return true;
+    if(p.db)DB=p.db; if(!DB.notas)DB.notas=[]; if(p.nid)NID=p.nid; return true;
   }catch(e){return false;}
 }
 function recalcNid(){
   let m=0;
-  ['personal','incidencias','eventual','textra'].forEach(k=>(DB[k]||[]).forEach(r=>{const n=Number(r.id)||0;if(n>m)m=n;}));
+  ['personal','incidencias','eventual','textra','notas'].forEach(k=>(DB[k]||[]).forEach(r=>{const n=Number(r.id)||0;if(n>m)m=n;}));
   NID=m+1;
 }
 
@@ -955,8 +1002,11 @@ async function cargarDatos(){
     if(Array.isArray(data.textra)){
       DB.textra=data.textra.map(t=>({id:str(t.id),noEmp:str(t.noEmp),nombre:str(t.nombre),turno:str(t.turno),turnoCubierto:str(t.turnoCubierto),fecha:fecha(t.fecha),horas:parseFloat(t.horas)||0,motivo:str(t.motivo)}));
     }
+    if(Array.isArray(data.notas)){
+      DB.notas=data.notas.map(n=>({id:str(n.id),noEmp:str(n.noEmp),nota:str(n.nota)}));
+    }
     recalcNid(); guardarLocal();
-    console.log('Sincronizado — personal:',DB.personal.length,'inc:',DB.incidencias.length);
+    console.log('Sincronizado — personal:',DB.personal.length,'inc:',DB.incidencias.length,'notas:',DB.notas.length);
   }catch(e){ console.error('GAS error:',e); }
   hideLdr();
   actualizarLabels();

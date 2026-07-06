@@ -102,21 +102,44 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .chips{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .tbadge{background:var(--az3);color:var(--az2);padding:1px 7px;border-radius:99px;font-size:10px;font-weight:600}
 .grp-hdr td{background:var(--az3)!important;padding:6px 10px!important;font-size:11px;font-weight:700;color:var(--az2);border-bottom:1px solid var(--az4)!important}
+.nav-search input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;width:220px;outline:none}
+.nav-search input::placeholder{color:#94A3B8}
+.nav-search input:focus{border-color:var(--az)}
+#buscador-res{display:none;position:absolute;top:32px;left:0;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25);width:280px;max-height:320px;overflow-y:auto;z-index:150}
+.bres-item{padding:8px 10px;font-size:11px;cursor:pointer;border-bottom:1px solid var(--bg3);color:var(--txt)}
+.bres-item:hover{background:var(--az3)}
+.bres-item:last-child{border-bottom:none}
+.dash-card{background:#fff;border-radius:var(--radio2);box-shadow:var(--sombra);cursor:pointer;transition:transform .12s}
+.dash-card:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.dash-stat{text-align:center}
+.dash-stat b{font-size:18px;display:block}
+.row-flash{background:var(--az4)!important;transition:background 1.2s}
+.cal-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.cal-tbl th{background:var(--bg2);color:var(--txt3);font-size:10px;font-weight:700;text-transform:uppercase;padding:6px;text-align:center;border-bottom:2px solid var(--bg3)}
+.cal-tbl td{border:1px solid var(--bg3);vertical-align:top;height:74px;padding:4px}
 </style>
 </head>
 <body>
 <nav class="nav">
   <span class="nav-brand"><span>📋</span>Incidencias CMGA</span>
-  <button class="nav-tab active" onclick="showPage('tmat',this)">🌅 Matutino</button>
+  <button class="nav-tab active" onclick="showPage('resumen',this)">🏠 Resumen</button>
+  <button class="nav-tab" onclick="showPage('tmat',this)">🌅 Matutino</button>
   <button class="nav-tab" onclick="showPage('vesp',this)">🌆 Vespertino</button>
   <button class="nav-tab" onclick="showPage('noct',this)">🌙 Nocturno</button>
   <button class="nav-tab" onclick="showPage('sup',this)">⭐ Supervisoras</button>
   <button class="nav-tab" onclick="showPage('ja',this)">📅 J. Acumulada</button>
   <button class="nav-tab" onclick="showPage('eventual',this)">🔄 Eventual</button>
+  <button class="nav-tab" onclick="showPage('vacaciones',this)">🏖 Vacaciones</button>
   <button class="nav-tab" onclick="showPage('concentrado',this)">📊 Concentrado</button>
   <button class="nav-tab" onclick="showPage('personal',this)">👥 Personal</button>
   <button class="nav-tab" onclick="showPage('textra',this)">⏱ T. Extra</button>
-  <div class="nav-right"><button class="btn-pin" onclick="abrirPin()">🔒 PIN</button></div>
+  <div class="nav-right">
+    <div class="nav-search" style="position:relative">
+      <input id="buscadorI" type="text" placeholder="🔍 Buscar empleado o No. Emp" oninput="buscarEmpleado(this.value)" onkeydown="if(event.key==='Enter')buscarEnterEmpleado()">
+      <div id="buscador-res"></div>
+    </div>
+    <button class="btn-pin" onclick="abrirPin()">🔒 PIN</button>
+  </div>
 </nav>
 
 <div id="toast" class="toast"></div>
@@ -133,8 +156,19 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <div class="mf"><button class="btn btn-primary" onclick="verPin()">Entrar</button></div></div>
 </div>
 
+<!-- RESUMEN / DASHBOARD -->
+<div class="page active" id="page-resumen">
+  <div style="margin-bottom:14px">
+    <div class="sec-t">🏠 Resumen del día</div>
+    <div class="sec-s" id="resumen-fecha">...</div>
+  </div>
+  <div id="resumen-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:16px"></div>
+  <div id="resumen-aniversarios" style="margin-bottom:14px"></div>
+  <div id="resumen-alertas"></div>
+</div>
+
 <!-- PÁGINAS TURNO -->
-<div class="page active" id="page-tmat">
+<div class="page" id="page-tmat">
   <div class="period-bar">
     <div class="period-nav"><button onclick="camPeriodo(-1)">‹</button><span id="lbl-tmat" class="period-label">...</span><button onclick="camPeriodo(1)">›</button></div>
     <button class="period-btn active" id="q1-tmat" onclick="setQ(1)">Q1 · 11–25</button>
@@ -202,6 +236,17 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <div class="card"><div class="card-header"><span class="card-title">🔄 Personal Eventual</span><span id="cnt-ev" class="card-count"></span></div>
   <div class="wrap"><table class="tbl"><thead><tr><th class="tl">Trabajador</th><th class="tl">Fecha</th><th class="tl">Área</th><th class="tl">Incidencia cubierta</th><th class="tl">Observaciones</th><th></th></tr></thead>
   <tbody id="tbody-ev"><tr><td colspan="6" class="empty">Sin registros en este período</td></tr></tbody></table></div></div>
+</div>
+
+<!-- VACACIONES -->
+<div class="page" id="page-vacaciones">
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+    <div><div class="sec-t">🏖 Calendario de Vacaciones</div><div class="sec-s">Personal en vacaciones (V) por día</div></div>
+    <select id="vac-mes" class="fi" style="width:130px" onchange="renderVacaciones()"><option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option><option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option><option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option><option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option></select>
+    <select id="vac-anio" class="fi" style="width:80px" onchange="renderVacaciones()"><option value="2025">2025</option><option value="2026">2026</option><option value="2027">2027</option></select>
+    <select id="vac-turno" class="fi" style="width:160px" onchange="renderVacaciones()"><option value="">Todos los turnos</option><option value="tmat">Matutino</option><option value="vesp">Vespertino</option><option value="noct">Nocturno</option><option value="sup">Supervisoras</option><option value="ja">J. Acumulada</option></select>
+  </div>
+  <div id="vac-cal"><div class="empty">Cargando calendario...</div></div>
 </div>
 
 <!-- CONCENTRADO -->
@@ -287,7 +332,7 @@ INCS.forEach(i=>IMAP[i.c]=i);
 // ESTADO
 // ══════════════════════════════════════════════════════════
 let Q = (()=>{const h=new Date(),d=h.getDate();return{mes:h.getMonth(),anio:h.getFullYear(),q:d>=11&&d<=25?1:2}})();
-let PAG = 'tmat', pinOK=false, pinCB=null, filtP='';
+let PAG = 'resumen', pinOK=false, pinCB=null, filtP='';
 let SEL=[], MULTI=false;
 let DB = {personal:[],incidencias:[],eventual:[],textra:[],notas:[]};
 let NID = 1;
@@ -375,6 +420,8 @@ function actualizarLabels(){
   if(cm)cm.value=mes; if(ca)ca.value=anio;
   const tm=document.getElementById('tx-mes'),ta=document.getElementById('tx-anio');
   if(tm)tm.value=mes; if(ta)ta.value=anio;
+  const vm=document.getElementById('vac-mes'),va=document.getElementById('vac-anio');
+  if(vm)vm.value=mes; if(va)va.value=anio;
 }
 function renderPag(id){
   if(TURNOS.includes(id))renderTurno(id);
@@ -382,6 +429,8 @@ function renderPag(id){
   else if(id==='concentrado')renderConc();
   else if(id==='textra')renderTextra();
   else if(id==='personal')renderPersonal();
+  else if(id==='resumen')renderResumen();
+  else if(id==='vacaciones')renderVacaciones();
 }
 function camPeriodo(d){
   let {mes,anio,q}=Q;
@@ -810,6 +859,183 @@ function renderPersonal(){
     tr.lastElementChild.appendChild(btn);tb.appendChild(tr);
   });
 }
+
+// ══════════════════════════════════════════════════════════
+// RESUMEN / DASHBOARD
+// ══════════════════════════════════════════════════════════
+function irATurno(t){
+  const btn=document.querySelector('.nav-tab[onclick*="\''+t+'\'"]');
+  showPage(t,btn);
+}
+function renderResumen(){
+  const hoy=new Date(), hoyStr=fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
+  const fEl=document.getElementById('resumen-fecha');
+  if(fEl){
+    let txt=hoy.toLocaleDateString('es-MX',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+    fEl.textContent='📅 '+(txt.charAt(0).toUpperCase()+txt.slice(1));
+  }
+  let cards='';
+  TURNOS.forEach(t=>{
+    const pers=DB.personal.filter(p=>p.turno===t);
+    const cont={};
+    pers.forEach(p=>{
+      const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===hoyStr)[0];
+      const c=io?io.incidencia:'—';
+      cont[c]=(cont[c]||0)+1;
+    });
+    const total=pers.length;
+    const presentes=cont['A']||0, faltas=cont['F']||0, vac=cont['V']||0, inc=cont['I']||0, sinReg=cont['—']||0;
+    cards+='<div class="dash-card" onclick="irATurno(\''+t+'\')">'
+      +'<div class="card-header"><span class="card-title">'+TICO[t]+' '+TLBL[t]+'</span><span class="card-count">'+total+' personas</span></div>'
+      +'<div style="padding:12px 14px;display:flex;gap:6px;justify-content:space-between;text-align:center">'
+      +'<div class="dash-stat"><b style="color:#1D4ED8">'+presentes+'</b>Asist.</div>'
+      +'<div class="dash-stat"><b style="color:var(--rojo)">'+faltas+'</b>Faltas</div>'
+      +'<div class="dash-stat"><b style="color:#15803D">'+vac+'</b>Vacac.</div>'
+      +'<div class="dash-stat"><b style="color:#7E22CE">'+inc+'</b>Incap.</div>'
+      +'<div class="dash-stat"><b style="color:var(--txt3)">'+sinReg+'</b>S/reg.</div>'
+      +'</div></div>';
+  });
+  const cardsEl=document.getElementById('resumen-cards');
+  if(cardsEl)cardsEl.innerHTML=cards||'<div class="empty">Sin personal registrado</div>';
+
+  const alT=[];
+  TURNOS.forEach(t=>alT.push(...calcAlertas(t,hoy.getMonth(),hoy.getFullYear()).map(a=>Object.assign({turno:t},a))));
+  const alEl=document.getElementById('resumen-alertas');
+  if(alEl){
+    alEl.innerHTML = alT.length
+      ? '<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⚠️ Alertas del mes en curso</div>'
+        +alT.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+' <span style="color:var(--txt3)">('+TLBL[a.turno]+')</span></div>').join('')+'</div>'
+      : '<div class="empty">Sin alertas de movimientos/pases este mes</div>';
+  }
+  renderAniversarios();
+}
+function parseFechaIngreso(str){
+  if(!str)return null;
+  str=String(str).trim();
+  let m=str.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
+  if(m)return{dia:parseInt(m[1]),mes:parseInt(m[2])-1,anioTxt:m[3]};
+  m=str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if(m)return{dia:parseInt(m[3]),mes:parseInt(m[2])-1,anioTxt:m[1]};
+  return null;
+}
+function renderAniversarios(){
+  const el=document.getElementById('resumen-aniversarios');
+  if(!el)return;
+  const hoy=new Date(), mesActual=hoy.getMonth(), diaHoy=hoy.getDate();
+  const lista=[];
+  DB.personal.forEach(p=>{
+    const f=parseFechaIngreso(p.fechaIngreso);
+    if(f&&f.mes===mesActual){
+      let anios='';
+      if(f.anioTxt&&f.anioTxt.length===4){
+        const a=hoy.getFullYear()-parseInt(f.anioTxt);
+        if(a>0)anios=a+' año'+(a!==1?'s':'')+' — ';
+      }
+      lista.push({nombre:p.nombre,turno:p.turno,dia:f.dia,anios,esHoy:f.dia===diaHoy,pasado:f.dia<diaHoy});
+    }
+  });
+  lista.sort((a,b)=>a.dia-b.dia);
+  if(!lista.length){el.innerHTML='<div class="empty">Sin aniversarios de ingreso este mes</div>';return;}
+  el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🎉 Aniversarios de ingreso — '+MESES[mesActual].charAt(0).toUpperCase()+MESES[mesActual].slice(1)+'</div>'
+    +lista.map(a=>'<div class="ai" style="background:'+(a.esHoy?'#DCFCE7':'var(--bg2)')+';border-left:3px solid '+(a.esHoy?'#15803D':'var(--az)')+'">'
+      +(a.esHoy?'🎂 ':(a.pasado?'✓ ':'📌 '))+'<b>'+a.nombre+'</b> — día '+a.dia+' · '+a.anios+TLBL[a.turno]
+      +(a.esHoy?' <span style="font-weight:700;color:#15803D">¡Hoy!</span>':'')
+    +'</div>').join('')+'</div>';
+}
+
+// ══════════════════════════════════════════════════════════
+// CALENDARIO DE VACACIONES
+// ══════════════════════════════════════════════════════════
+function renderVacaciones(){
+  const elMes=document.getElementById('vac-mes'),elAnio=document.getElementById('vac-anio'),elTurno=document.getElementById('vac-turno');
+  if(!elMes||!elAnio)return;
+  const mes=parseInt(elMes.value),anio=parseInt(elAnio.value),ft=elTurno.value;
+  const primerDia=new Date(anio,mes,1).getDay();
+  const diasEnMes=new Date(anio,mes+1,0).getDate();
+  const hoy=new Date();
+  const porDia={};
+  DB.incidencias.forEach(i=>{
+    if(i.incidencia!=='V')return;
+    const d=new Date(i.fecha+'T12:00:00');
+    if(d.getMonth()!==mes||d.getFullYear()!==anio)return;
+    const p=DB.personal.filter(x=>x.noEmp===i.noEmp)[0];
+    if(!p)return;
+    if(ft&&p.turno!==ft)return;
+    const dia=d.getDate();
+    if(!porDia[dia])porDia[dia]=[];
+    porDia[dia].push({nombre:p.nombre,turno:p.turno});
+  });
+  let html='<div class="card"><div class="wrap"><table class="cal-tbl"><thead><tr>';
+  ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].forEach(d=>html+='<th>'+d+'</th>');
+  html+='</tr></thead><tbody><tr>';
+  for(let i=0;i<primerDia;i++)html+='<td style="background:var(--bg2)"></td>';
+  let col=primerDia;
+  for(let dia=1;dia<=diasEnMes;dia++){
+    const gente=porDia[dia]||[];
+    const esHoy=(hoy.getDate()===dia&&hoy.getMonth()===mes&&hoy.getFullYear()===anio);
+    html+='<td style="'+(esHoy?'background:var(--az3)':'')+'"><div style="font-size:10px;font-weight:700;color:'+(esHoy?'var(--az2)':'var(--txt3)')+';margin-bottom:3px">'+dia+'</div>'
+      +gente.map(g=>'<div style="font-size:9px;background:#DCFCE7;color:#15803D;border-radius:3px;padding:1px 4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+g.nombre+' — '+TLBL[g.turno]+'">'+g.nombre.split(' ')[0]+'</div>').join('')
+      +'</td>';
+    col++;
+    if(col%7===0&&dia!==diasEnMes)html+='</tr><tr>';
+  }
+  const restante=(7-(col%7))%7;
+  for(let i=0;i<restante;i++)html+='<td style="background:var(--bg2)"></td>';
+  html+='</tr></tbody></table></div></div>';
+  const total=Object.values(porDia).reduce((s,arr)=>s+arr.length,0);
+  document.getElementById('vac-cal').innerHTML = total
+    ? html
+    : html+'<div class="empty" style="margin-top:10px">Sin vacaciones registradas para este mes'+(ft?' en '+TLBL[ft]:'')+'</div>';
+}
+
+// ══════════════════════════════════════════════════════════
+// BUSCADOR GLOBAL DE EMPLEADO
+// ══════════════════════════════════════════════════════════
+function buscarEmpleado(q){
+  const res=document.getElementById('buscador-res');
+  q=q.trim().toLowerCase();
+  if(!q){res.style.display='none';res.innerHTML='';return;}
+  const matches=DB.personal.filter(p=>p.nombre.toLowerCase().includes(q)||p.noEmp.toLowerCase().includes(q)).slice(0,8);
+  if(!matches.length){
+    res.innerHTML='<div class="bres-item" style="cursor:default;color:var(--txt3)">Sin resultados</div>';
+    res.style.display='block';
+    return;
+  }
+  res.innerHTML=matches.map(p=>'<div class="bres-item" onmousedown="irAEmpleado(\''+p.noEmp+'\',\''+p.turno+'\')"><b>'+p.nombre+'</b><br><span style="color:var(--txt3)">'+p.noEmp+' · '+(TLBL[p.turno]||p.turno)+'</span></div>').join('');
+  res.style.display='block';
+}
+function buscarEnterEmpleado(){
+  const q=document.getElementById('buscadorI').value.trim().toLowerCase();
+  if(!q)return;
+  const m=DB.personal.filter(p=>p.nombre.toLowerCase().includes(q)||p.noEmp.toLowerCase().includes(q))[0];
+  if(m)irAEmpleado(m.noEmp,m.turno); else toast('Sin resultados');
+}
+function irAEmpleado(noEmp,turno){
+  document.getElementById('buscador-res').style.display='none';
+  document.getElementById('buscadorI').value='';
+  if(TURNOS.includes(turno)){
+    const btn=document.querySelector('.nav-tab[onclick*="\''+turno+'\'"]');
+    showPage(turno,btn);
+    setTimeout(()=>{
+      const row=document.querySelector('tr[data-remp="'+noEmp+'"]');
+      if(row){
+        row.scrollIntoView({behavior:'smooth',block:'center'});
+        row.classList.add('row-flash');
+        setTimeout(()=>row.classList.remove('row-flash'),1500);
+      }
+    },120);
+  } else {
+    const btn=document.querySelector('.nav-tab[onclick*="\'personal\'"]');
+    showPage('personal',btn);
+    toast('Empleado eventual — revisa el catálogo de Personal');
+  }
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.nav-search')){
+    const res=document.getElementById('buscador-res');
+    if(res)res.style.display='none';
+  }
+});
 
 // ══════════════════════════════════════════════════════════
 // CONCENTRADO

@@ -452,9 +452,9 @@ function calcAlertas(turno,mes,anio){
       return i.noEmp===p.noEmp&&d.getMonth()===mes&&d.getFullYear()===anio;
     });
     const m=inc.filter(i=>i.incidencia==='M').length;
-    const ps=inc.filter(i=>i.incidencia==='Ps').length;
+    const ps=inc.filter(i=>i.incidencia==='Ps'||i.incidencia==='Pe').length;
     if(m>=4)al.push({tipo:'M',nombre:p.nombre,noEmp:p.noEmp,val:m,msg:m+' movimientos'});
-    if(ps>=2)al.push({tipo:'Ps',nombre:p.nombre,noEmp:p.noEmp,val:ps,msg:ps+' pases de salida'});
+    if(ps>=2)al.push({tipo:'Ps',nombre:p.nombre,noEmp:p.noEmp,val:ps,msg:ps+' pases (entrada/salida)'});
   });
   return al;
 }
@@ -725,15 +725,26 @@ function validar(noEmp,fecha,inc){
   const incMes=DB.incidencias.filter(i=>{const di=new Date(i.fecha+'T12:00:00');return i.noEmp===noEmp&&di.getMonth()===mes&&di.getFullYear()===anio&&i.fecha!==fecha;});
   const per=DB.personal.filter(p=>p.noEmp===noEmp)[0];
   const nom=per?per.nombre:noEmp;
-  if(inc==='M'||inc==='Ps'){
-    if(incMes.some(i=>i.incidencia==='F'))return{ok:false,tipo:'falta',titulo:'⛔ Bloqueado',msg:nom+' tiene una <b>Falta</b> este mes. No se puede registrar '+(inc==='M'?'Movimiento':'Pase de salida')+'.'};
+  // Bloqueo por Falta: ventana móvil de 1 mes A PARTIR del día en que se registró la Falta
+  // (no se limita al mes calendario — si la falta es el 25, el bloqueo llega hasta el 25 del mes siguiente)
+  if(inc==='M'||inc==='Ps'||inc==='Pe'){
+    const faltas=DB.incidencias.filter(i=>i.noEmp===noEmp&&i.incidencia==='F'&&i.fecha!==fecha);
+    const faltaBloq=faltas.find(f=>{
+      const df=new Date(f.fecha+'T12:00:00');
+      const limite=new Date(df); limite.setMonth(limite.getMonth()+1);
+      return d>=df&&d<limite;
+    });
+    if(faltaBloq){
+      const tipoLbl=inc==='M'?'Movimiento':(inc==='Ps'?'Pase de salida':'Pase de entrada');
+      return{ok:false,tipo:'falta',titulo:'⛔ Bloqueado',msg:nom+' tiene una <b>Falta</b> registrada el <b>'+faltaBloq.fecha+'</b>. El bloqueo de Movimientos/Pases dura 1 mes a partir de esa fecha, por lo que no se puede registrar '+tipoLbl+' el '+fecha+'.'};
+    }
   }
   if(inc==='F'){
-    const m=incMes.filter(i=>i.incidencia==='M').length,ps=incMes.filter(i=>i.incidencia==='Ps').length;
+    const m=incMes.filter(i=>i.incidencia==='M').length,ps=incMes.filter(i=>i.incidencia==='Ps'||i.incidencia==='Pe').length;
     if(m>0||ps>0)return{ok:false,tipo:'advertencia',titulo:'⚠️ Advertencia',msg:nom+' ya tiene '+(m>0?m+' movimiento(s)':'')+(m>0&&ps>0?' y ':'')+(ps>0?ps+' pase(s)':'')+' este mes. ¿Registrar Falta de todas formas?'};
   }
   if(inc==='M'){const t=incMes.filter(i=>i.incidencia==='M').length+1;if(t>=4)return{ok:true,alerta:'⚠️ '+nom+' acumula <b>'+t+' Movimientos</b> este mes.'};}
-  if(inc==='Ps'){const t=incMes.filter(i=>i.incidencia==='Ps').length+1;if(t>=2)return{ok:true,alerta:'🚨 '+nom+' acumula <b>'+t+' Pases de salida</b> este mes.'};}
+  if(inc==='Ps'||inc==='Pe'){const t=incMes.filter(i=>i.incidencia==='Ps'||i.incidencia==='Pe').length+1;if(t>=2)return{ok:true,alerta:'🚨 '+nom+' acumula <b>'+t+' Pases (entrada/salida)</b> este mes.'};}
   return{ok:true};
 }
 

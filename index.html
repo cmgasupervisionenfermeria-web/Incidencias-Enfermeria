@@ -160,13 +160,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 
 <!-- RESUMEN / DASHBOARD -->
 <div class="page active" id="page-resumen">
+  <div id="resumen-bloqueados" style="margin-bottom:14px"></div>
   <div style="margin-bottom:14px">
-    <div class="sec-t">🏠 Resumen del día</div>
+    <div class="sec-t">🏠 Resumen quincenal</div>
     <div class="sec-s" id="resumen-fecha">...</div>
+  </div>
+  <div class="period-bar" style="margin-bottom:14px">
+    <div class="period-nav"><button onclick="camPeriodo(-1)">‹</button><span id="lbl-resumen" class="period-label">...</span><button onclick="camPeriodo(1)">›</button></div>
+    <button class="period-btn active" id="q1-resumen" onclick="setQ(1)">Q1 · 11–25</button>
+    <button class="period-btn" id="q2-resumen" onclick="setQ(2)">Q2 · 26–10</button>
   </div>
   <div id="resumen-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:16px"></div>
   <div id="resumen-aniversarios" style="margin-bottom:14px"></div>
-  <div id="resumen-bloqueados" style="margin-bottom:14px"></div>
   <div id="resumen-alertas"></div>
 </div>
 
@@ -434,7 +439,7 @@ function showPage(id,btn){
 }
 function actualizarLabels(){
   const {mes,anio,q}=Q, lbl=lblQ(mes,anio,q);
-  ['tmat','vesp','noct','sup','ja','eventual','textra'].forEach(t=>{
+  ['tmat','vesp','noct','sup','ja','eventual','textra','resumen'].forEach(t=>{
     const el=document.getElementById('lbl-'+t); if(el)el.textContent=lbl;
     const e1=document.getElementById('q1-'+t),e2=document.getElementById('q2-'+t);
     if(e1)e1.classList.toggle('active',q===1); if(e2)e2.classList.toggle('active',q===2);
@@ -903,23 +908,27 @@ function irATurno(t){
   showPage(t,btn);
 }
 function renderResumen(){
-  const hoy=new Date(), hoyStr=fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
+  const {mes,anio,q}=Q;
+  const dias=diasQ(mes,anio,q), fechas=dias.map(d=>d.fecha);
+  const hoy=new Date();
   const fEl=document.getElementById('resumen-fecha');
-  if(fEl){
-    let txt=hoy.toLocaleDateString('es-MX',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-    fEl.textContent='📅 '+(txt.charAt(0).toUpperCase()+txt.slice(1));
-  }
+  if(fEl)fEl.textContent='📅 '+lblQ(mes,anio,q)+' · '+dias.length+' días';
   let cards='';
   TURNOS.forEach(t=>{
     const pers=DB.personal.filter(p=>p.turno===t);
     const cont={};
+    let sinReg=0, celdasTot=0;
     pers.forEach(p=>{
-      const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===hoyStr)[0];
-      const c=io?io.incidencia:'—';
-      cont[c]=(cont[c]||0)+1;
+      fechas.forEach(f=>{
+        celdasTot++;
+        const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===f)[0];
+        const c=io?io.incidencia:'—';
+        cont[c]=(cont[c]||0)+1;
+        if(c==='—')sinReg++;
+      });
     });
     const total=pers.length;
-    const presentes=cont['A']||0, faltas=cont['F']||0, vac=cont['V']||0, inc=cont['I']||0, sinReg=cont['—']||0;
+    const presentes=cont['A']||0, faltas=cont['F']||0, vac=cont['V']||0, inc=cont['I']||0;
     cards+='<div class="dash-card" onclick="irATurno(\''+t+'\')">'
       +'<div class="card-header"><span class="card-title">'+TICO[t]+' '+TLBL[t]+'</span><span class="card-count">'+total+' personas</span></div>'
       +'<div style="padding:12px 14px;display:flex;gap:6px;justify-content:space-between;text-align:center">'
@@ -1495,4 +1504,5 @@ document.addEventListener('DOMContentLoaded', cargarDatos);
 </script>
 </body>
 </html>
+
 

@@ -1056,7 +1056,9 @@ function abrirModalVacacion(prefill){
       return;
     }
     aplicar();
-  },'Guardar');
+  },'Guardar',[
+    {lbl:'🖨 Imprimir solicitud',cls:'btn-ghost',fn:imprimirSolicitudVacacion}
+  ]);
 }
 function elimVacacionDia(noEmp,fecha,nombre){
   if(!confirm('¿Quitar la vacación de '+nombre+' el '+fecha+'?'))return;
@@ -1224,6 +1226,107 @@ function periodoVacActual(fechaIngresoStr){
   const fin=new Date(anioIng+anioServicio+1,f.mes,f.dia);
   return{anioServicio,dias:diasVacXAntiguedad(anioServicio),inicio:aniv,fin,ingresoValido:true};
 }
+
+// ══════════════════════════════════════════════════════════
+// IMPRESIÓN — Solicitud de Periodo Vacacional (formato CMGA)
+// ══════════════════════════════════════════════════════════
+function imprimirSolicitudVacacion(){
+  const noEmp=document.getElementById('vc-e').value;
+  const fIni=document.getElementById('vc-fi').value, fFin=document.getElementById('vc-ff').value;
+  if(!noEmp||!fIni||!fFin){toast('Selecciona empleado y fechas antes de imprimir');return;}
+  if(fFin<fIni){toast('La fecha fin debe ser igual o posterior a la de inicio');return;}
+  const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
+  if(!p){toast('Empleado no encontrado');return;}
+
+  const fechas=[];
+  let d=new Date(fIni+'T12:00:00'); const fEnd=new Date(fFin+'T12:00:00');
+  while(d<=fEnd){fechas.push(fStr(d.getFullYear(),d.getMonth(),d.getDate()));d.setDate(d.getDate()+1);}
+
+  const per=periodoVacActual(p.fechaIngreso);
+  let diasCorr=0, tomadosPrevios=0;
+  if(per&&per.ingresoValido&&per.anioServicio>=1){
+    diasCorr=per.dias;
+    tomadosPrevios=DB.incidencias.filter(i=>{
+      if(i.noEmp!==noEmp||i.incidencia!=='V')return false;
+      if(fechas.includes(i.fecha))return false; // no contar el rango que se está solicitando ahora mismo
+      const df=new Date(i.fecha+'T12:00:00');
+      return df>=per.inicio&&df<per.fin;
+    }).length;
+  }
+  const restantesAntes = diasCorr ? (diasCorr - tomadosPrevios) : 0;
+
+  const reanuda=new Date(fEnd); reanuda.setDate(reanuda.getDate()+1);
+  const reanudaStr=fStr(reanuda.getFullYear(),reanuda.getMonth(),reanuda.getDate());
+  const hoy=new Date();
+  const hoyStr=String(hoy.getDate()).padStart(2,'0')+'-'+MESC[hoy.getMonth()].toLowerCase()+'-'+String(hoy.getFullYear()).slice(-2);
+  const fmt=f=>f?f.split('-').reverse().join(' '):'';
+  const antiguedadTxt = (per&&per.ingresoValido&&per.anioServicio>=1) ? (per.anioServicio+(per.anioServicio===1?' año':' años')) : 'Menos de 1 año';
+
+  const html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
+    +'<title>Solicitud de Periodo Vacacional — '+p.nombre+'</title>'
+    +'<style>'
+    +'body{font-family:Arial,Helvetica,sans-serif;color:#1E293B;padding:28px;max-width:760px;margin:0 auto}'
+    +'.marco{border:2px solid #1B3A6B;border-radius:6px;padding:26px 32px}'
+    +'.hdr{border-bottom:2px solid #1A8A6F;padding-bottom:14px;margin-bottom:18px}'
+    +'.hdr b{color:#1B3A6B;font-size:19px}'
+    +'.titulo{text-align:center;font-size:14px;font-weight:700;color:#1B3A6B;text-transform:uppercase;letter-spacing:.5px;margin-top:6px}'
+    +'.fecha-top{text-align:right;font-size:12px;margin-bottom:14px}'
+    +'.campo{display:flex;gap:6px;margin-bottom:10px;font-size:12px}'
+    +'.campo label{font-weight:700;color:#1B3A6B;white-space:nowrap}'
+    +'.campo .val{flex:1;border-bottom:1px solid #94A3B8;padding-bottom:1px}'
+    +'.fila{display:flex;gap:24px}'
+    +'.fila .campo{flex:1}'
+    +'.seccion{background:#EEF2FF;border-left:3px solid #1A8A6F;padding:8px 14px;margin:14px 0;font-weight:700;color:#1B3A6B;font-size:11px;text-transform:uppercase}'
+    +'.descanso{margin:14px 0;font-size:11px;font-weight:600;color:#475569;text-align:center}'
+    +'.descanso small{display:block;font-weight:400;color:#94A3B8;margin-top:2px}'
+    +'.firmas{display:flex;justify-content:space-between;margin-top:46px;gap:20px}'
+    +'.firma{flex:1;text-align:center;font-size:11px}'
+    +'.firma .linea{border-top:1px solid #1E293B;margin-bottom:4px;padding-top:34px}'
+    +'.folio{font-size:9px;color:#94A3B8;margin-top:18px;text-align:right}'
+    +'@media print{ body{padding:0} .marco{border:1.5px solid #1B3A6B} }'
+    +'</style></head><body>'
+    +'<div class="marco">'
+    +'<div class="hdr"><b>CENTRO MÉDICO GALERÍAS AGUASCALIENTES</b><div class="titulo">Solicitud de Periodo Vacacional</div></div>'
+    +'<div class="fecha-top"><b>FECHA:</b> '+hoyStr+'</div>'
+    +'<div class="campo"><label>EL SUSCRITO:</label><span class="val">'+p.nombre+'</span></div>'
+    +'<div class="fila">'
+    +'<div class="campo"><label>NO. EMPLEADO:</label><span class="val">'+p.noEmp+'</span></div>'
+    +'<div class="campo"><label>DEPARTAMENTO:</label><span class="val">Enfermería — '+(TLBL[p.turno]||p.turno)+'</span></div>'
+    +'</div>'
+    +'<div class="seccion">Solicito día(s) de mi periodo vacacional</div>'
+    +'<div class="campo"><label>FECHA DE INGRESO:</label><span class="val">'+(p.fechaIngreso||'')+'</span></div>'
+    +'<div class="fila">'
+    +'<div class="campo"><label>ANTIGÜEDAD:</label><span class="val">'+antiguedadTxt+'</span></div>'
+    +'<div class="campo"><label>DÍAS CORRESPONDIENTES:</label><span class="val">'+(diasCorr||'—')+(diasCorr?' días':'')+'</span></div>'
+    +'</div>'
+    +'<div class="fila">'
+    +'<div class="campo"><label>DÍAS GOZADOS:</label><span class="val">'+tomadosPrevios+'</span></div>'
+    +'<div class="campo"><label>DÍAS RESTANTES:</label><span class="val">'+restantesAntes+'</span></div>'
+    +'<div class="campo"><label>DÍAS A DISFRUTAR:</label><span class="val">'+fechas.length+'</span></div>'
+    +'</div>'
+    +'<div class="fila">'
+    +'<div class="campo"><label>DEL:</label><span class="val">'+fmt(fIni)+'</span></div>'
+    +'<div class="campo"><label>AL:</label><span class="val">'+fmt(fFin)+'</span></div>'
+    +'</div>'
+    +'<div class="descanso">Días de descanso: ( L ) ( M ) ( M ) ( J ) ( V ) ( S ) ( D )<small>Marcar a mano — no capturados en el sistema</small></div>'
+    +'<div class="campo"><label>REANUDANDO LABORES EL DÍA:</label><span class="val">'+fmt(reanudaStr)+'</span></div>'
+    +'<div class="firmas">'
+    +'<div class="firma"><div class="linea"></div>Nombre y firma<br>Solicitante</div>'
+    +'<div class="firma"><div class="linea"></div>Nombre y firma<br>Jefe inmediato</div>'
+    +'<div class="firma"><div class="linea"></div>Nombre y firma<br>Recursos Humanos</div>'
+    +'</div>'
+    +'<div class="folio">Generado automáticamente — Incidencias Enfermería CMGA · '+p.noEmp+'-'+fIni+'</div>'
+    +'</div>'
+    +'<scr'+'ipt>window.onload=function(){window.print();};</scr'+'ipt>'
+    +'</body></html>';
+
+  const win=window.open('','_blank');
+  if(!win){toast('⚠ Habilita las ventanas emergentes para imprimir');return;}
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
 function renderSaldoVac(){
   const ft=document.getElementById('sv-turno')?document.getElementById('sv-turno').value:'';
   const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&(!ft||p.turno===ft)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
@@ -1504,5 +1607,4 @@ document.addEventListener('DOMContentLoaded', cargarDatos);
 </script>
 </body>
 </html>
-
 

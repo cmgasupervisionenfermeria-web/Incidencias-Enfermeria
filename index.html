@@ -304,6 +304,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <button class="chip" onclick="filtPersonal('sup',this)">Supervisoras</button>
     <button class="chip" onclick="filtPersonal('ja',this)">J. Acumulada</button>
     <button class="chip" onclick="filtPersonal('eventual',this)">Eventual</button>
+    <button class="chip" onclick="filtPersonal('bajas',this)" style="border-color:#FCA5A5;color:#B91C1C">🚫 Bajas</button>
   </div>
   <div class="card"><div class="wrap"><table class="tbl"><thead><tr>
     <th class="tl">No. Emp</th><th class="tl">Nombre</th><th class="tl">Puesto</th><th class="tl">Turno</th><th class="tl">F. Ingreso</th><th></th>
@@ -474,7 +475,7 @@ function setQ(q){Q.q=q; actualizarLabels(); renderPag(PAG);}
 // ══════════════════════════════════════════════════════════
 function calcAlertas(turno,mes,anio){
   const al=[];
-  DB.personal.filter(p=>p.turno===turno).forEach(p=>{
+  DB.personal.filter(p=>p.turno===turno&&p.activo!=='0').forEach(p=>{
     const inc=DB.incidencias.filter(i=>{
       const d=new Date(i.fecha+'T12:00:00');
       return i.noEmp===p.noEmp&&d.getMonth()===mes&&d.getFullYear()===anio;
@@ -502,7 +503,7 @@ function clsInc(c){if(!c)return'ic-vacio';return IMAP[c]?IMAP[c].cls:'ic-A';}
 function renderTurno(turno){
   renderAlertas(turno);
   const {mes,anio,q}=Q;
-  const todos=DB.personal.filter(p=>p.turno===turno);
+  const todos=DB.personal.filter(p=>p.turno===turno&&p.activo!=='0');
   todos.sort((a,b)=>{
     const oa=a.tipo==='pasante'?3:(a.puesto||'').toLowerCase().includes('camillero')?2:1;
     const ob=b.tipo==='pasante'?3:(b.puesto||'').toLowerCase().includes('camillero')?2:1;
@@ -783,7 +784,9 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
   const p=noEmpEdit?DB.personal.filter(x=>x.noEmp===noEmpEdit)[0]:null;
   const tOpts=TCAT.map(t=>'<option value="'+t+'"'+((p?p.turno:turnoDefault)===t?' selected':'')+'>'+TLBL[t]+'</option>').join('');
   const esPas=p&&p.tipo==='pasante';
-  const html='<div class="fr2"><div class="fr"><label class="fl">No. Empleado *</label><input id="fn" class="fi" value="'+(p?p.noEmp:'')+'" placeholder="46098" '+(p?'readonly':'')+'></div>'
+  const esBaja=p&&p.activo==='0';
+  const html=(esBaja?'<div style="background:#FEE2E2;color:#B91C1C;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:700;margin-bottom:12px">🚫 Este empleado está dado de baja'+(p.fechaBaja?' desde el '+p.fechaBaja:'')+'. Su historial se conserva; puedes reactivarlo abajo.</div>':'')
+    +'<div class="fr2"><div class="fr"><label class="fl">No. Empleado *</label><input id="fn" class="fi" value="'+(p?p.noEmp:'')+'" placeholder="46098" '+(p?'readonly':'')+'></div>'
     +'<div class="fr"><label class="fl">Tipo *</label><select id="ft" class="fs" onchange="document.getElementById(\'ffr\').style.opacity=this.value===\'pasante\'?\'1\':\'0.4\'">'
     +'<option value="base"'+(!esPas?' selected':'')+'>Base</option><option value="pasante"'+(esPas?' selected':'')+'>Pasante</option></select></div></div>'
     +'<div class="fr"><label class="fl">Nombre completo *</label><input id="fno" class="fi" value="'+(p?p.nombre:'')+'" placeholder="APELLIDO Nombre"></div>'
@@ -791,8 +794,13 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     +'<div class="fr"><label class="fl">Puesto</label><input id="fpu" class="fi" value="'+(p?p.puesto:'')+'" placeholder="Enfermera..."></div></div>'
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha ingreso</label><input id="fi" class="fi" value="'+(p?p.fechaIngreso:'')+'" placeholder="DD.MM.AA"></div>'
     +'<div class="fr" id="ffr" style="'+(esPas?'':'opacity:.4')+'"><label class="fl">Fin rotación</label><input id="ffin" class="fi" value="'+(p&&p.finRotacion?p.finRotacion:'')+'" placeholder="DD.MM.AA"></div></div>';
-  const extra=p?[{lbl:'Eliminar',cls:'btn-danger',fn:()=>elimPersonal(noEmpEdit)}]:[];
-  abrirModal(p?'Editar empleado':'Nuevo empleado',html,()=>{
+  const extra=[];
+  if(p){
+    if(esBaja) extra.push({lbl:'↩️ Reactivar',cls:'btn-ghost',fn:()=>reactivarPersonal(noEmpEdit)});
+    else extra.push({lbl:'🚫 Dar de baja',cls:'btn-ghost',fn:()=>darDeBajaPersonal(noEmpEdit)});
+    extra.push({lbl:'Eliminar todo',cls:'btn-danger',fn:()=>elimPersonal(noEmpEdit)});
+  }
+  abrirModal(p?(esBaja?'Editar empleado (de baja)':'Editar empleado'):'Nuevo empleado',html,()=>{
     const noEmp=document.getElementById('fn').value.trim();
     const nombre=document.getElementById('fno').value.trim();
     if(!noEmp||!nombre){toast('Completa los campos obligatorios');return;}
@@ -801,7 +809,7 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     const fechaIngreso=document.getElementById('fi').value.trim();
     const tipo=document.getElementById('ft').value;
     const finRotacion=document.getElementById('ffin').value.trim();
-    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||''};
+    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):'')};
     if(noEmpEdit){
       const idx=DB.personal.findIndex(x=>x.noEmp===noEmpEdit);
       if(idx>=0){rec.id=DB.personal[idx].id;DB.personal[idx]=rec;}
@@ -813,12 +821,31 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
   },'Guardar',extra);
 }
 function editPersonal(n){abrirModalPersonal(n,null);}
+function darDeBajaPersonal(noEmp){
+  const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
+  if(!p)return;
+  if(!confirm('¿Dar de baja a '+p.nombre+'? Dejará de aparecer en las tablas activas, pero todo su historial (incidencias, Concentrado, Historial Anual, vacaciones pasadas) se conserva.'))return;
+  const hoy=new Date();
+  const rec=Object.assign({},p,{activo:'0',fechaBaja:fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate())});
+  const idx=DB.personal.findIndex(x=>x.noEmp===noEmp);
+  if(idx>=0)DB.personal[idx]=rec;
+  guardarLocal();cerrarModal();toast('🚫 '+p.nombre+' dado de baja — su historial se conservó');renderPag(PAG);syncPersonal(rec);
+}
+function reactivarPersonal(noEmp){
+  const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
+  if(!p)return;
+  const rec=Object.assign({},p,{activo:'1',fechaBaja:''});
+  const idx=DB.personal.findIndex(x=>x.noEmp===noEmp);
+  if(idx>=0)DB.personal[idx]=rec;
+  guardarLocal();cerrarModal();toast('↩️ '+p.nombre+' reactivado');renderPag(PAG);syncPersonal(rec);
+}
 function elimPersonal(noEmp){
-  if(!confirm('¿Eliminar este empleado y todas sus incidencias?'))return;
+  const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
+  if(!confirm('⚠ Esto borra PERMANENTEMENTE a '+(p?p.nombre:noEmp)+' y TODO su historial de incidencias, notas y registros — no se puede deshacer.\n\nSi solo renunció o causó baja, usa mejor "🚫 Dar de baja" para conservar su historial.\n\n¿Continuar con el borrado permanente?'))return;
   DB.personal=DB.personal.filter(p=>p.noEmp!==noEmp);
   DB.incidencias=DB.incidencias.filter(i=>i.noEmp!==noEmp);
   DB.notas=DB.notas.filter(n=>n.noEmp!==noEmp);
-  guardarLocal();cerrarModal();toast('Empleado eliminado');renderPag(PAG);syncDeletePersonal(noEmp);
+  guardarLocal();cerrarModal();toast('Empleado eliminado permanentemente');renderPag(PAG);syncDeletePersonal(noEmp);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -883,14 +910,16 @@ function filtPersonal(t,btn){
   renderPersonal();
 }
 function renderPersonal(){
-  const lista=DB.personal.filter(p=>!filtP||p.turno===filtP).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const soloBajas=filtP==='bajas';
+  const lista=DB.personal.filter(p=>soloBajas?p.activo==='0':((!filtP||p.turno===filtP)&&p.activo!=='0')).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   const tb=document.getElementById('tbody-p');
-  if(!lista.length){tb.innerHTML='<tr><td colspan="6" class="empty">Sin personal</td></tr>';return;}
+  if(!lista.length){tb.innerHTML='<tr><td colspan="6" class="empty">'+(soloBajas?'Sin empleados dados de baja':'Sin personal')+'</td></tr>';return;}
   while(tb.firstChild)tb.removeChild(tb.firstChild);
   lista.forEach(p=>{
     const tr=document.createElement('tr');
+    if(p.activo==='0')tr.style.opacity='.6';
     tr.innerHTML='<td class="tl"><span class="emp">'+p.noEmp+'</span></td>'
-      +'<td class="tl"><span class="nom">'+p.nombre+'</span></td>'
+      +'<td class="tl"><span class="nom">'+p.nombre+(p.activo==='0'?' <span style="color:#B91C1C;font-size:9px;font-weight:700">🚫 BAJA'+(p.fechaBaja?' · '+p.fechaBaja:'')+'</span>':'')+'</span></td>'
       +'<td class="tl"><span class="pst">'+p.puesto+'</span></td>'
       +'<td class="tl"><span class="tbadge">'+(TLBL[p.turno]||p.turno)+'</span></td>'
       +'<td class="tl"><span class="ing">'+p.fechaIngreso+'</span></td><td></td>';
@@ -915,7 +944,7 @@ function renderResumen(){
   if(fEl)fEl.textContent='📅 '+lblQ(mes,anio,q)+' · '+dias.length+' días';
   let cards='';
   TURNOS.forEach(t=>{
-    const pers=DB.personal.filter(p=>p.turno===t);
+    const pers=DB.personal.filter(p=>p.turno===t&&p.activo!=='0');
     const cont={};
     let sinReg=0, celdasTot=0;
     pers.forEach(p=>{
@@ -962,7 +991,7 @@ function calcBloqueados(){
   const activos=[];
   DB.incidencias.filter(i=>i.incidencia==='F').forEach(f=>{
     const p=DB.personal.filter(x=>x.noEmp===f.noEmp)[0];
-    if(!p)return;
+    if(!p||p.activo==='0')return;
     const df=new Date(f.fecha+'T12:00:00');
     const limite=new Date(df); limite.setMonth(limite.getMonth()+1);
     if(hoy>=df&&hoy<limite){
@@ -997,6 +1026,7 @@ function renderAniversarios(){
   const hoy=new Date(), mesActual=hoy.getMonth(), diaHoy=hoy.getDate();
   const lista=[];
   DB.personal.forEach(p=>{
+    if(p.activo==='0')return;
     const f=parseFechaIngreso(p.fechaIngreso);
     if(f&&f.mes===mesActual){
       let anios='';
@@ -1020,7 +1050,7 @@ function renderAniversarios(){
 // VACACIONES — calendario + registro
 // ══════════════════════════════════════════════════════════
 function abrirModalVacacion(prefill){
-  const pOpts=DB.personal.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre))
+  const pOpts=DB.personal.filter(p=>p.activo!=='0').sort((a,b)=>a.nombre.localeCompare(b.nombre))
     .map(p=>'<option value="'+p.noEmp+'">'+p.nombre+' ('+(TLBL[p.turno]||p.turno)+')</option>').join('');
   const fPre=prefill&&prefill.fecha?prefill.fecha:'';
   const html='<div class="fr"><label class="fl">Empleado *</label><select id="vc-e" class="fs"><option value="">— Selecciona —</option>'+pOpts+'</select></div>'
@@ -1181,6 +1211,7 @@ function renderConc(){
     const cnt={};tipos.forEach(t=>cnt[t]=0);
     inc.forEach(i=>{if(cnt[i.incidencia]!==undefined)cnt[i.incidencia]++;});
     const tot=Object.values(cnt).reduce((s,v)=>s+v,0);
+    if(p.activo==='0'&&!tot)return;
     const rc=cnt['Ps']>=2?'alerta-ps':cnt['M']>=4?'alerta-row':'';
     html+='<tr class="'+rc+'"><td class="tl"><span class="emp">'+p.noEmp+'</span></td><td class="tl"><span class="nom">'+p.nombre+'</span></td><td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td>';
     tipos.forEach(t=>{const v=cnt[t];let s=v>0?'font-weight:700;':'color:var(--txt3);';if(t==='M'&&v>=4)s='font-weight:700;color:var(--naranja);';if(t==='Ps'&&v>=2)s='font-weight:700;color:var(--rojo);';html+='<td style="text-align:center;'+s+'">'+(v||'–')+'</td>';});
@@ -1362,7 +1393,7 @@ function imprimirSolicitudVacacion(){
 
 function renderSaldoVac(){
   const ft=document.getElementById('sv-turno')?document.getElementById('sv-turno').value:'';
-  const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&(!ft||p.turno===ft)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.activo!=='0'&&(!ft||p.turno===ft)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   const body=document.getElementById('sv-body');
   if(!pers.length){body.innerHTML='<div class="empty">Sin personal</div>';return;}
   let filas='';
@@ -1399,7 +1430,7 @@ function renderSaldoVac(){
 }
 function expCSVSaldoVac(){
   const ft=document.getElementById('sv-turno').value;
-  const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&(!ft||p.turno===ft));
+  const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.activo!=='0'&&(!ft||p.turno===ft));
   let csv='No.Emp,Nombre,Turno,Periodo,DiasCorresponden,DiasTomados,Saldo\n';
   pers.forEach(p=>{
     const per=periodoVacActual(p.fechaIngreso);
@@ -1465,7 +1496,7 @@ function expCSVHistorial(){
 // TIEMPO EXTRA
 // ══════════════════════════════════════════════════════════
 function abrirModalTextra(tx){
-  const pOpts=DB.personal.filter(p=>p.tipo!=='pasante'&&p.turno!=='eventual').sort((a,b)=>a.nombre.localeCompare(b.nombre))
+  const pOpts=DB.personal.filter(p=>p.tipo!=='pasante'&&p.turno!=='eventual'&&p.activo!=='0').sort((a,b)=>a.nombre.localeCompare(b.nombre))
     .map(p=>'<option value="'+p.noEmp+'"'+(tx&&tx.noEmp===p.noEmp?' selected':'')+'>'+p.nombre+' ('+TLBL[p.turno]+')</option>').join('');
   const tCOpts=TCAT.map(t=>'<option value="'+t+'"'+(tx&&tx.turnoCubierto===t?' selected':'')+'>'+TLBL[t]+'</option>').join('');
   const html='<div class="fr"><label class="fl">Empleado *</label><select id="tx-e" class="fs"><option value="">— Selecciona —</option>'+pOpts+'</select></div>'
@@ -1614,7 +1645,7 @@ async function cargarDatos(){
     const str = v=>(v!==null&&v!==undefined)?String(v):'';
     const fecha = v=>v?String(v).substring(0,10):'';
     if(Array.isArray(data.personal)&&data.personal.length>0){
-      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion)}));
+      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja)}));
     }
     if(Array.isArray(data.incidencias)){
       DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion)}));

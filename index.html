@@ -140,6 +140,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
       <input id="buscadorI" type="text" placeholder="🔍 Buscar empleado o No. Emp" oninput="buscarEmpleado(this.value)" onkeydown="if(event.key==='Enter')buscarEnterEmpleado()">
       <div id="buscador-res"></div>
     </div>
+    <button class="btn-pin" style="background:#1A8A6F" onclick="rPin(descargarRespaldoCompleto)">💾 Respaldo</button>
     <button class="btn-pin" onclick="abrirPin()">🔒 PIN</button>
   </div>
 </nav>
@@ -161,6 +162,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 <!-- RESUMEN / DASHBOARD -->
 <div class="page active" id="page-resumen">
   <div id="resumen-bloqueados" style="margin-bottom:14px"></div>
+  <div id="resumen-vencimientos" style="margin-bottom:14px"></div>
   <div style="margin-bottom:14px">
     <div class="sec-t">🏠 Resumen quincenal</div>
     <div class="sec-s" id="resumen-fecha">...</div>
@@ -421,6 +423,15 @@ function diasQ(mes,anio,q){
   return dias;
 }
 function dow(f){return DSEM[new Date(f+'T12:00:00').getDay()];}
+// Días de descanso fijos por turno (patrón semanal habitual):
+// - Matutino / Vespertino: sábado y domingo
+// - Jornada Acumulada: lunes a viernes (trabaja fines de semana)
+// - Nocturno / Supervisoras / Eventual: sin patrón fijo definido — se asume fin de semana por defecto
+function esDescansoTurno(turno,fechaStr){
+  const day=new Date(fechaStr+'T12:00:00').getDay(); // 0=Dom...6=Sáb
+  if(turno==='ja') return day>=1&&day<=5;
+  return day===0||day===6;
+}
 function lblQ(mes,anio,q){
   if(q===1)return '11 – 25 de '+MESES[mes]+' '+anio;
   const ms=mes===11?0:mes+1,as=mes===11?anio+1:anio;
@@ -523,7 +534,7 @@ function renderTurno(turno){
   }
   let thD='';
   dias.forEach(d=>{
-    const dw=dow(d.fecha),fin=dw==='D'||dw==='S';
+    const dw=dow(d.fecha),fin=esDescansoTurno(turno,d.fecha);
     thD+='<th class="th-d'+(fin?' dow-d':'')+'" onclick="activarMulti();selDia(\''+d.fecha+'\',\''+turno+'\')" title="Seleccionar día '+d.dia+'">'
       +'<div class="th-d-n">'+d.dia+'</div><div class="th-d-d">'+dw+'</div></th>';
   });
@@ -542,7 +553,7 @@ function renderTurno(turno){
     dias.forEach(d=>{
       const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===d.fecha)[0];
       const inc=io?io.incidencia:'';
-      const dw=dow(d.fecha),fin=dw==='D'||dw==='S';
+      const dw=dow(d.fecha),fin=esDescansoTurno(turno,d.fecha);
       const cls=inc?clsInc(inc):(fin?'ic-DIA':'ic-vacio');
       celdas+='<td class="ic '+cls+'" data-emp="'+p.noEmp+'" data-fecha="'+d.fecha+'" data-turno="'+turno+'" onclick="clickCell(this)" title="'+d.fecha+'">'+(inc||'')+'</td>';
     });
@@ -982,6 +993,7 @@ function renderResumen(){
   }
   renderAniversarios();
   renderBloqueados();
+  renderVencimientos();
 }
 // ══════════════════════════════════════════════════════════
 // PRÓXIMO DESBLOQUEO — empleados con Falta activa (bloqueo M/Ps/Pe vigente)
@@ -1010,6 +1022,43 @@ function renderBloqueados(){
   if(!act.length){el.innerHTML='';return;}
   el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🔒 Bloqueados por Falta — sin autorizar Movimientos/Pases</div>'
     +act.map(a=>'<div class="ai" style="background:var(--rojo2);border-left:3px solid var(--rojo)">🔒 <b>'+a.nombre+'</b> <span style="color:var(--txt3)">('+TLBL[a.turno]+')</span> — Falta el '+a.faltaFecha+' · se desbloquea el <b>'+a.desbloqueo+'</b> <span style="color:var(--txt3)">('+a.diasRest+' día'+(a.diasRest!==1?'s':'')+' restante'+(a.diasRest!==1?'s':'')+')</span></div>').join('')+'</div>';
+}
+// ══════════════════════════════════════════════════════════
+// VENCIMIENTO DE PERIODO VACACIONAL — LFT: el derecho debe
+// ejercerse dentro del período de servicio vigente (aniversario
+// a aniversario). Alerta si a alguien se le vence pronto sin
+// haber agotado su saldo.
+// ══════════════════════════════════════════════════════════
+function calcVencimientos(umbralDias){
+  umbralDias = umbralDias || 30;
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const lista=[];
+  DB.personal.filter(p=>p.tipo!=='pasante'&&p.activo!=='0').forEach(p=>{
+    const per=periodoVacActual(p.fechaIngreso);
+    if(!per||!per.ingresoValido||per.anioServicio<1||!per.fin)return;
+    const tomados=DB.incidencias.filter(i=>{
+      if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;
+      const d=new Date(i.fecha+'T12:00:00');
+      return d>=per.inicio&&d<per.fin;
+    }).length;
+    const saldo=per.dias-tomados;
+    if(saldo<=0)return; // ya agotó su derecho, no hay riesgo de vencimiento
+    const diasRestantes=Math.ceil((per.fin-hoy)/86400000);
+    if(diasRestantes>=0&&diasRestantes<=umbralDias){
+      lista.push({noEmp:p.noEmp,nombre:p.nombre,turno:p.turno,saldo,vence:fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate()),diasRestantes});
+    }
+  });
+  lista.sort((a,b)=>a.diasRestantes-b.diasRestantes);
+  return lista;
+}
+function renderVencimientos(){
+  const el=document.getElementById('resumen-vencimientos');
+  if(!el)return;
+  const lista=calcVencimientos(30);
+  if(!lista.length){el.innerHTML='';return;}
+  el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⏳ Periodos vacacionales por vencer (≤30 días) sin agotar</div>'
+    +lista.map(v=>'<div class="ai" style="background:'+(v.diasRestantes<=7?'var(--rojo2)':'var(--naranja2)')+';border-left:3px solid '+(v.diasRestantes<=7?'var(--rojo)':'var(--naranja)')+'">'
+      +(v.diasRestantes<=7?'🔴':'🟠')+' <b>'+v.nombre+'</b> <span style="color:var(--txt3)">('+TLBL[v.turno]+')</span> — le quedan <b>'+v.saldo+' día'+(v.saldo!==1?'s':'')+'</b> sin tomar · vence el <b>'+v.vence+'</b> <span style="color:var(--txt3)">('+v.diasRestantes+' día'+(v.diasRestantes!==1?'s':'')+' restante'+(v.diasRestantes!==1?'s':'')+')</span></div>').join('')+'</div>';
 }
 function parseFechaIngreso(str){
   if(!str)return null;
@@ -1297,6 +1346,16 @@ function imprimirSolicitudVacacion(){
   const folio = 'VAC-'+p.noEmp+'-'+fIni.replace(/-/g,'');
   const diasRestTxt = fechas.length===1?'1 día':fechas.length+' días';
   const stat=(num,lbl,warn)=>'<div class="stat'+(warn?' warn':'')+'"><b>'+num+'</b><span>'+lbl+'</span></div>';
+  // Patrón de descanso por turno, alineado a ['L','M','M','J','V','S','D']
+  const PATRON_DESCANSO={
+    tmat:[false,false,false,false,false,true,true],
+    vesp:[false,false,false,false,false,true,true],
+    ja:[true,true,true,true,true,false,false]
+  };
+  const patronDesc=PATRON_DESCANSO[p.turno]||null;
+  const notaDesc = p.turno==='ja' ? 'Lunes a viernes — excepto días festivos oficiales'
+    : (p.turno==='tmat'||p.turno==='vesp') ? 'Sábado y domingo'
+    : 'Marcar a mano — no capturados en el sistema';
 
   const docHtml = (copiaLbl)=>(
     '<div class="doc">'
@@ -1317,8 +1376,8 @@ function imprimirSolicitudVacacion(){
     +'</div>'
     +'<div class="banner"><div class="rng">🏖 '+fmt(fIni)+' → '+fmt(fFin)+' · '+diasRestTxt+'</div><div class="sub">Reanuda labores el '+fmt(reanudaStr)+'</div></div>'
     +'<div class="desc">Días de descanso fijos<div class="chips">'
-    +['L','M','M','J','V','S','D'].map(d=>'<span class="chip-d">'+d+'</span>').join('')
-    +'</div><small>Marcar a mano — no capturados en el sistema</small></div>'
+    +['L','M','M','J','V','S','D'].map((d,idx)=>'<span class="chip-d'+(patronDesc&&patronDesc[idx]?' on':'')+'">'+d+'</span>').join('')
+    +'</div><small>'+notaDesc+'</small></div>'
     +'<div class="firmas">'
     +'<div class="firma"><div class="pad"></div><div class="lbl">Solicitante</div><div class="sub">'+p.nombre.split(' ')[0]+'</div></div>'
     +'<div class="firma"><div class="pad"></div><div class="lbl">Jefe inmediato</div><div class="sub">Vo. Bo.</div></div>'
@@ -1365,6 +1424,7 @@ function imprimirSolicitudVacacion(){
     +'.desc{text-align:center;font-size:9.5px;color:#64748B;margin-bottom:10px}'
     +'.desc .chips{margin-top:3px}'
     +'.chip-d{display:inline-block;border:1px solid #CBD5E1;border-radius:5px;padding:1px 6px;margin:0 1.5px;font-size:9px;font-weight:700;color:#475569}'
+    +'.chip-d.on{background:#1A8A6F;border-color:#1A8A6F;color:#fff}'
     +'.desc small{display:block;color:#94A3B8;margin-top:3px;font-weight:400}'
     +'.firmas{display:flex;gap:8px;margin-top:4px}'
     +'.firma{flex:1;border:1.2px dashed #CBD5E1;border-radius:8px;padding:4px 6px 6px;text-align:center}'
@@ -1396,15 +1456,16 @@ function renderSaldoVac(){
   const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.activo!=='0'&&(!ft||p.turno===ft)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   const body=document.getElementById('sv-body');
   if(!pers.length){body.innerHTML='<div class="empty">Sin personal</div>';return;}
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
   let filas='';
   pers.forEach(p=>{
     const per=periodoVacActual(p.fechaIngreso);
     if(!per||!per.ingresoValido){
-      filas+='<tr><td class="tl"><span class="emp">'+p.noEmp+'</span></td><td class="tl"><span class="nom">'+p.nombre+'</span></td><td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td><td class="tl" style="color:var(--txt3)">Fecha de ingreso no reconocida</td><td></td><td></td><td></td></tr>';
+      filas+='<tr><td class="tl"><span class="emp">'+p.noEmp+'</span></td><td class="tl"><span class="nom">'+p.nombre+'</span></td><td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td><td class="tl" style="color:var(--txt3)">Fecha de ingreso no reconocida</td><td></td><td></td><td></td><td></td></tr>';
       return;
     }
     if(per.anioServicio<1){
-      filas+='<tr><td class="tl"><span class="emp">'+p.noEmp+'</span></td><td class="tl"><span class="nom">'+p.nombre+'</span></td><td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td><td class="tl" style="color:var(--txt3)">Menos de 1 año de antigüedad — aún sin derecho generado</td><td></td><td></td><td></td></tr>';
+      filas+='<tr><td class="tl"><span class="emp">'+p.noEmp+'</span></td><td class="tl"><span class="nom">'+p.nombre+'</span></td><td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td><td class="tl" style="color:var(--txt3)">Menos de 1 año de antigüedad — aún sin derecho generado</td><td></td><td></td><td></td><td></td></tr>';
       return;
     }
     const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
@@ -1416,29 +1477,38 @@ function renderSaldoVac(){
     }).length;
     const saldo=per.dias-tomados;
     const colorSaldo=saldo<=0?'var(--rojo)':(saldo<=per.dias*0.25?'var(--naranja)':'#15803D');
+    const diasVence=Math.ceil((per.fin-hoy)/86400000);
+    const venceTxt = saldo<=0 ? '<span style="color:var(--txt3)">—</span>'
+      : diasVence<=7 ? '<span style="color:var(--rojo);font-weight:700">🔴 '+diasVence+' d.</span>'
+      : diasVence<=30 ? '<span style="color:var(--naranja);font-weight:700">🟠 '+diasVence+' d.</span>'
+      : '<span style="color:var(--txt3)">'+diasVence+' d.</span>';
     filas+='<tr><td class="tl"><span class="emp">'+p.noEmp+'</span></td><td class="tl"><span class="nom">'+p.nombre+'</span></td>'
       +'<td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td>'
       +'<td class="tl" style="font-size:10px;color:var(--txt2)">'+iniStr+' – '+finStr+' (año '+per.anioServicio+')</td>'
       +'<td style="text-align:center;font-weight:700">'+per.dias+'</td>'
       +'<td style="text-align:center">'+tomados+'</td>'
-      +'<td style="text-align:center;font-weight:700;color:'+colorSaldo+'">'+saldo+'</td></tr>';
+      +'<td style="text-align:center;font-weight:700;color:'+colorSaldo+'">'+saldo+'</td>'
+      +'<td style="text-align:center;font-size:10px">'+venceTxt+'</td></tr>';
   });
   body.innerHTML='<div class="card"><div class="wrap"><table class="tbl"><thead><tr>'
     +'<th class="tl">No.Emp</th><th class="tl">Nombre</th><th class="tl">Turno</th><th class="tl">Período vigente</th>'
-    +'<th>Días que corresponden</th><th>Tomados</th><th>Saldo</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>'
-    +'<div style="font-size:10px;color:var(--txt3);margin-top:8px">Cálculo según la tabla de la LFT (Reforma "Vacaciones Dignas"). El período se cuenta de aniversario a aniversario de ingreso, no por año calendario. Verifica manualmente los casos marcados sin fecha reconocida.</div>';
+    +'<th>Días que corresponden</th><th>Tomados</th><th>Saldo</th><th>Vence en</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>'
+    +'<div style="font-size:10px;color:var(--txt3);margin-top:8px">Cálculo según la tabla de la LFT (Reforma "Vacaciones Dignas"). El período se cuenta de aniversario a aniversario de ingreso, no por año calendario. "Vence en" solo se marca cuando aún queda saldo por disfrutar. Verifica manualmente los casos marcados sin fecha reconocida.</div>';
 }
 function expCSVSaldoVac(){
   const ft=document.getElementById('sv-turno').value;
   const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.activo!=='0'&&(!ft||p.turno===ft));
-  let csv='No.Emp,Nombre,Turno,Periodo,DiasCorresponden,DiasTomados,Saldo\n';
+  let csv='No.Emp,Nombre,Turno,Periodo,DiasCorresponden,DiasTomados,Saldo,DiasParaVencer\n';
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
   pers.forEach(p=>{
     const per=periodoVacActual(p.fechaIngreso);
-    if(!per||!per.ingresoValido||per.anioServicio<1){csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+',N/A,,,\n';return;}
+    if(!per||!per.ingresoValido||per.anioServicio<1){csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+',N/A,,,,\n';return;}
     const tomados=DB.incidencias.filter(i=>{if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;const d=new Date(i.fecha+'T12:00:00');return d>=per.inicio&&d<per.fin;}).length;
     const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
     const finStr=fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate());
-    csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+','+iniStr+'_a_'+finStr+','+per.dias+','+tomados+','+(per.dias-tomados)+'\n';
+    const saldo=per.dias-tomados;
+    const diasVence=saldo<=0?'':Math.ceil((per.fin-hoy)/86400000);
+    csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+','+iniStr+'_a_'+finStr+','+per.dias+','+tomados+','+saldo+','+diasVence+'\n';
   });
   dlCSV(csv,'SaldoVacaciones_'+new Date().toISOString().slice(0,10));
 }
@@ -1545,6 +1615,16 @@ function renderTextra(){
 // CSV EXPORTS
 // ══════════════════════════════════════════════════════════
 function dlCSV(csv,nom){const b=new Blob([csv],{type:'text/csv;charset=utf-8;'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=nom+'.csv';a.click();URL.revokeObjectURL(u);}
+function descargarRespaldoCompleto(){
+  const payload={
+    generado:new Date().toISOString(),
+    version:'respaldo-incidencias-cmga-v1',
+    personal:DB.personal, incidencias:DB.incidencias, eventual:DB.eventual, textra:DB.textra, notas:DB.notas
+  };
+  const b=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8;'}),u=URL.createObjectURL(b),a=document.createElement('a');
+  a.href=u; a.download='Respaldo_Incidencias_CMGA_'+new Date().toISOString().slice(0,10)+'.json'; a.click(); URL.revokeObjectURL(u);
+  toast('✓ Respaldo descargado — '+DB.personal.length+' personal · '+DB.incidencias.length+' incidencias · '+DB.eventual.length+' eventuales · '+DB.textra.length+' t.extra · '+DB.notas.length+' notas');
+}
 function expCSV(turno){
   const {mes,anio,q}=Q,pers=DB.personal.filter(p=>p.turno===turno),dias=diasQ(mes,anio,q);
   let csv='No.Emp,Nombre,Puesto,F.Ingreso,'+dias.map(d=>d.dia+'/'+String(d.mes+1).padStart(2,'0')).join(',')+',Obs\n';

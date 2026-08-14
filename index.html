@@ -56,6 +56,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .ic-Pe{background:#FFF7ED;color:#C2410C}.ic-LC{background:#F0FDF4;color:#166534}
 .ic-L{background:#FEF2F2;color:#B91C1C}.ic-F4H{background:#FEF9C3;color:#92400E}
 .ic-F8H{background:#FEF3C7;color:#78350F}.ic-vacio{background:transparent;color:transparent}
+.ic-na{width:30px;min-width:26px;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 4px,#E2E8F0 4px,#E2E8F0 8px);cursor:default}
 .ic-DIA{background:var(--bg2);color:var(--txt3);font-size:8px}
 .alerta-row td{border-left:3px solid var(--naranja)}.alerta-ps td{border-left:3px solid var(--rojo)}
 .ab{display:inline-block;padding:1px 4px;border-radius:3px;font-size:8px;font-weight:700;margin-left:3px}
@@ -432,6 +433,52 @@ function esDescansoTurno(turno,fechaStr){
   if(turno==='ja') return day>=1&&day<=5;
   return day===0||day===6;
 }
+
+// ══════════════════════════════════════════════════════════
+// HORARIO MIXTO — personal que se presenta en más de un turno
+// según el día de la semana (p.ej. sábado en J.Acumulada y
+// domingo en Nocturno). Se guarda en p.horarioMixto como texto
+// compacto "sab:ja,dom:noct" y se interpreta como objeto
+// {ja:['sab'], noct:['dom']}. El turno principal (p.turno) sigue
+// rigiendo antigüedad/vacaciones (no dependen del turno); si la
+// persona NO tiene horarioMixto, se comporta como siempre
+// (aparece todos los días bajo su único turno).
+// ══════════════════════════════════════════════════════════
+const DIAS3=['dom','lun','mar','mie','jue','vie','sab'];
+function parseHorarioMixto(str){
+  if(!str||!String(str).trim())return null;
+  const obj={};
+  String(str).split(/[,;]/).forEach(tok=>{
+    const m=tok.trim().toLowerCase().match(/^([a-záéíóú]{3,})\s*:\s*([a-z]+)$/i);
+    if(!m)return;
+    let dia=m[1].normalize('NFD').replace(/[\u0300-\u036f]/g,'').slice(0,3);
+    const turno=m[2].toLowerCase();
+    if(DIAS3.indexOf(dia)===-1||TCAT.indexOf(turno)===-1)return;
+    if(!obj[turno])obj[turno]=[];
+    if(obj[turno].indexOf(dia)===-1)obj[turno].push(dia);
+  });
+  return Object.keys(obj).length?obj:null;
+}
+function serializarHorarioMixto(obj){
+  if(!obj)return'';
+  const partes=[];
+  Object.keys(obj).forEach(turno=>obj[turno].forEach(dia=>partes.push(dia+':'+turno)));
+  return partes.join(', ');
+}
+// ¿Esta persona puede llegar a aparecer en la tabla de este turno? (sin importar el día)
+function perteneceATurno(p,turno){
+  const hm=parseHorarioMixto(p.horarioMixto);
+  if(hm)return!!hm[turno];
+  return p.turno===turno;
+}
+// ¿Le corresponde a esta persona aparecer en ESTE turno, EN ESTA fecha?
+function esDiaAplicable(p,turno,fechaStr){
+  const hm=parseHorarioMixto(p.horarioMixto);
+  if(!hm)return p.turno===turno; // comportamiento normal: todos los días bajo su único turno
+  if(!hm[turno])return false;
+  const dia=DIAS3[new Date(fechaStr+'T12:00:00').getDay()];
+  return hm[turno].indexOf(dia)!==-1;
+}
 function lblQ(mes,anio,q){
   if(q===1)return '11 – 25 de '+MESES[mes]+' '+anio;
   const ms=mes===11?0:mes+1,as=mes===11?anio+1:anio;
@@ -486,7 +533,7 @@ function setQ(q){Q.q=q; actualizarLabels(); renderPag(PAG);}
 // ══════════════════════════════════════════════════════════
 function calcAlertas(turno,mes,anio){
   const al=[];
-  DB.personal.filter(p=>p.turno===turno&&p.activo!=='0').forEach(p=>{
+  DB.personal.filter(p=>perteneceATurno(p,turno)&&p.activo!=='0').forEach(p=>{
     const inc=DB.incidencias.filter(i=>{
       const d=new Date(i.fecha+'T12:00:00');
       return i.noEmp===p.noEmp&&d.getMonth()===mes&&d.getFullYear()===anio;
@@ -514,7 +561,7 @@ function clsInc(c){if(!c)return'ic-vacio';return IMAP[c]?IMAP[c].cls:'ic-A';}
 function renderTurno(turno){
   renderAlertas(turno);
   const {mes,anio,q}=Q;
-  const todos=DB.personal.filter(p=>p.turno===turno&&p.activo!=='0');
+  const todos=DB.personal.filter(p=>perteneceATurno(p,turno)&&p.activo!=='0');
   todos.sort((a,b)=>{
     const oa=a.tipo==='pasante'?3:(a.puesto||'').toLowerCase().includes('camillero')?2:1;
     const ob=b.tipo==='pasante'?3:(b.puesto||'').toLowerCase().includes('camillero')?2:1;
@@ -553,6 +600,10 @@ function renderTurno(turno){
     dias.forEach(d=>{
       const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===d.fecha)[0];
       const inc=io?io.incidencia:'';
+      if(!esDiaAplicable(p,turno,d.fecha)){
+        celdas+='<td class="ic-na" title="'+p.nombre+' no tiene turno aquí este día (horario mixto)"></td>';
+        return;
+      }
       const dw=dow(d.fecha),fin=esDescansoTurno(turno,d.fecha);
       const cls=inc?clsInc(inc):(fin?'ic-DIA':'ic-vacio');
       celdas+='<td class="ic '+cls+'" data-emp="'+p.noEmp+'" data-fecha="'+d.fecha+'" data-turno="'+turno+'" onclick="clickCell(this)" title="'+d.fecha+'">'+(inc||'')+'</td>';
@@ -804,7 +855,9 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     +'<div class="fr2"><div class="fr"><label class="fl">Turno *</label><select id="ftu" class="fs">'+tOpts+'</select></div>'
     +'<div class="fr"><label class="fl">Puesto</label><input id="fpu" class="fi" value="'+(p?p.puesto:'')+'" placeholder="Enfermera..."></div></div>'
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha ingreso</label><input id="fi" class="fi" value="'+(p?p.fechaIngreso:'')+'" placeholder="DD.MM.AA"></div>'
-    +'<div class="fr" id="ffr" style="'+(esPas?'':'opacity:.4')+'"><label class="fl">Fin rotación</label><input id="ffin" class="fi" value="'+(p&&p.finRotacion?p.finRotacion:'')+'" placeholder="DD.MM.AA"></div></div>';
+    +'<div class="fr" id="ffr" style="'+(esPas?'':'opacity:.4')+'"><label class="fl">Fin rotación</label><input id="ffin" class="fi" value="'+(p&&p.finRotacion?p.finRotacion:'')+'" placeholder="DD.MM.AA"></div></div>'
+    +'<div class="fr"><label class="fl">Horario mixto (opcional)</label><input id="fhm" class="fi" value="'+serializarHorarioMixto(parseHorarioMixto(p?p.horarioMixto:''))+'" placeholder="sab:ja, dom:noct"></div>'
+    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Solo si esta persona se presenta en <b>más de un turno</b> según el día — formato <code>día:turno</code> separado por comas (días: dom, lun, mar, mie, jue, vie, sab). Si se llena, ella SOLO aparecerá en cada tabla los días indicados aquí (el turno de arriba sigue rigiendo antigüedad/vacaciones). Déjalo vacío si tiene un único turno normal.</div>';
   const extra=[];
   if(p){
     if(esBaja) extra.push({lbl:'↩️ Reactivar',cls:'btn-ghost',fn:()=>reactivarPersonal(noEmpEdit)});
@@ -820,7 +873,11 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     const fechaIngreso=document.getElementById('fi').value.trim();
     const tipo=document.getElementById('ft').value;
     const finRotacion=document.getElementById('ffin').value.trim();
-    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):'')};
+    const hmRaw=document.getElementById('fhm').value.trim();
+    const hmParsed=parseHorarioMixto(hmRaw);
+    if(hmRaw&&!hmParsed){toast('⚠ Formato de horario mixto no reconocido — revisa el ejemplo (sab:ja, dom:noct)');return;}
+    const horarioMixto=hmParsed?serializarHorarioMixto(hmParsed):'';
+    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):''),horarioMixto};
     if(noEmpEdit){
       const idx=DB.personal.findIndex(x=>x.noEmp===noEmpEdit);
       if(idx>=0){rec.id=DB.personal[idx].id;DB.personal[idx]=rec;}
@@ -955,11 +1012,12 @@ function renderResumen(){
   if(fEl)fEl.textContent='📅 '+lblQ(mes,anio,q)+' · '+dias.length+' días';
   let cards='';
   TURNOS.forEach(t=>{
-    const pers=DB.personal.filter(p=>p.turno===t&&p.activo!=='0');
+    const pers=DB.personal.filter(p=>perteneceATurno(p,t)&&p.activo!=='0');
     const cont={};
     let sinReg=0, celdasTot=0;
     pers.forEach(p=>{
       fechas.forEach(f=>{
+        if(!esDiaAplicable(p,t,f))return;
         celdasTot++;
         const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===f)[0];
         const c=io?io.incidencia:'—';
@@ -1725,7 +1783,7 @@ async function cargarDatos(){
     const str = v=>(v!==null&&v!==undefined)?String(v):'';
     const fecha = v=>v?String(v).substring(0,10):'';
     if(Array.isArray(data.personal)&&data.personal.length>0){
-      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja)}));
+      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja),horarioMixto:str(p.horarioMixto)}));
     }
     if(Array.isArray(data.incidencias)){
       DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion)}));

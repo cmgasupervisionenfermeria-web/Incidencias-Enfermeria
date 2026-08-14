@@ -1750,12 +1750,15 @@ function diasVacXAntiguedad(anioServicio){
   return 30+extra*2;
 }
 // ══════════════════════════════════════════════════════════
-// MULTIPLICADOR DE DÍAS DE VACACIÓN POR TURNO — actualmente
-// desactivado: todos los turnos calculan 1 día tomado = 1 día de
-// saldo, igual que Matutino/Vespertino. (Antes Nocturno/J.Acumulada
-// usaban ×2 por sus guardias más largas; se revirtió a solicitud.)
+// MULTIPLICADOR DE DÍAS DE VACACIÓN POR TURNO — Nocturno (12 hrs)
+// y Jornada Acumulada (14 hrs) trabajan guardias más largas que un
+// turno estándar de 8 hrs; 1 guardia tomada como vacación consume
+// más de 1 día del saldo:
+// - Nocturno: ×2 (por sus 12 hrs)
+// - J. Acumulada: ×3 (por sus 14 hrs)
+// - Matutino/Vespertino/Supervisoras: ×1 (sin cambio)
 // ══════════════════════════════════════════════════════════
-const MULT_VACACION_TURNO={};
+const MULT_VACACION_TURNO={noct:2,ja:3};
 function multiplicadorVacacion(turno){return MULT_VACACION_TURNO[turno]||1;}
 // Calcula el período de servicio vigente (aniversario a aniversario) y los días que corresponden
 function normalizarAnio(anioTxt){
@@ -1951,11 +1954,14 @@ function renderSaldoVac(){
     }
     const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
     const finStr=fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate());
-    const tomados=DB.incidencias.filter(i=>{
+    const guardias=DB.incidencias.filter(i=>{
       if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;
       const d=new Date(i.fecha+'T12:00:00');
       return d>=per.inicio&&d<per.fin;
     }).length;
+    const mult=multiplicadorVacacion(p.turno);
+    const tomados=guardias*mult;
+    const tomadosTxt = mult>1 ? tomados+' <span style="color:var(--txt3);font-size:9px">('+guardias+' guardia'+(guardias!==1?'s':'')+' ×'+mult+')</span>' : String(tomados);
     const saldo=per.dias-tomados;
     const colorSaldo=saldo<=0?'var(--rojo)':(saldo<=per.dias*0.25?'var(--naranja)':'#15803D');
     const diasVence=Math.ceil((per.fin-hoy)/86400000);
@@ -1967,29 +1973,30 @@ function renderSaldoVac(){
       +'<td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td>'
       +'<td class="tl" style="font-size:10px;color:var(--txt2)">'+iniStr+' – '+finStr+' (año '+per.anioServicio+')</td>'
       +'<td style="text-align:center;font-weight:700">'+per.dias+'</td>'
-      +'<td style="text-align:center">'+tomados+'</td>'
+      +'<td style="text-align:center">'+tomadosTxt+'</td>'
       +'<td style="text-align:center;font-weight:700;color:'+colorSaldo+'">'+saldo+'</td>'
       +'<td style="text-align:center;font-size:10px">'+venceTxt+'</td></tr>';
   });
   body.innerHTML='<div class="card"><div class="wrap"><table class="tbl"><thead><tr>'
     +'<th class="tl">No.Emp</th><th class="tl">Nombre</th><th class="tl">Turno</th><th class="tl">Período vigente</th>'
     +'<th>Días que corresponden</th><th>Tomados</th><th>Saldo</th><th>Vence en</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>'
-    +'<div style="font-size:10px;color:var(--txt3);margin-top:8px">Cálculo según la tabla de la LFT (Reforma "Vacaciones Dignas"). El período se cuenta de aniversario a aniversario de ingreso, no por año calendario. "Vence en" solo se marca cuando aún queda saldo por disfrutar. Verifica manualmente los casos marcados sin fecha reconocida.</div>';
+    +'<div style="font-size:10px;color:var(--txt3);margin-top:8px">Cálculo según la tabla de la LFT (Reforma "Vacaciones Dignas"). El período se cuenta de aniversario a aniversario de ingreso, no por año calendario. Nocturno (12 hrs): cada guardia tomada consume <b>2 días</b> del saldo. J. Acumulada (14 hrs): cada guardia consume <b>3 días</b>. "Vence en" solo se marca cuando aún queda saldo por disfrutar. Verifica manualmente los casos marcados sin fecha reconocida.</div>';
 }
 function expCSVSaldoVac(){
   const ft=document.getElementById('sv-turno').value;
   const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.turno!=='eventual'&&p.activo!=='0'&&(!ft||p.turno===ft));
-  let csv='No.Emp,Nombre,Turno,Periodo,DiasCorresponden,DiasTomados,Saldo,DiasParaVencer\n';
+  let csv='No.Emp,Nombre,Turno,Periodo,DiasCorresponden,Guardias,DiasTomados,Saldo,DiasParaVencer\n';
   const hoy=new Date(); hoy.setHours(0,0,0,0);
   pers.forEach(p=>{
     const per=periodoVacActual(p.fechaIngreso);
-    if(!per||!per.ingresoValido||per.anioServicio<1){csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+',N/A,,,,\n';return;}
-    const tomados=DB.incidencias.filter(i=>{if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;const d=new Date(i.fecha+'T12:00:00');return d>=per.inicio&&d<per.fin;}).length;
+    if(!per||!per.ingresoValido||per.anioServicio<1){csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+',N/A,,,,,\n';return;}
+    const guardias=DB.incidencias.filter(i=>{if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;const d=new Date(i.fecha+'T12:00:00');return d>=per.inicio&&d<per.fin;}).length;
+    const tomados=guardias*multiplicadorVacacion(p.turno);
     const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
     const finStr=fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate());
     const saldo=per.dias-tomados;
     const diasVence=saldo<=0?'':Math.ceil((per.fin-hoy)/86400000);
-    csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+','+iniStr+'_a_'+finStr+','+per.dias+','+tomados+','+saldo+','+diasVence+'\n';
+    csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+','+iniStr+'_a_'+finStr+','+per.dias+','+guardias+','+tomados+','+saldo+','+diasVence+'\n';
   });
   dlCSV(csv,'SaldoVacaciones_'+new Date().toISOString().slice(0,10));
 }

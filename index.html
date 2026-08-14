@@ -842,20 +842,36 @@ function validar(noEmp,fecha,inc){
 // ══════════════════════════════════════════════════════════
 // MODAL PERSONAL
 // ══════════════════════════════════════════════════════════
+function actualizarCamposPorTurno(){
+  const sel=document.getElementById('ftu');
+  const esEventual=sel&&sel.value==='eventual';
+  const lbl=document.getElementById('lbl-fn');
+  const inp=document.getElementById('fn');
+  const nota=document.getElementById('nota-eventual');
+  if(lbl)lbl.textContent=esEventual?'No. Empleado (opcional)':'No. Empleado *';
+  if(inp)inp.placeholder=esEventual?'Se genera automático si lo dejas vacío':'46098';
+  if(nota)nota.style.display=esEventual?'block':'none';
+}
+function generarNoEmpEventual(){
+  const existentes=DB.personal.filter(p=>/^EV\d+$/.test(p.noEmp)).map(p=>parseInt(p.noEmp.slice(2),10)||0);
+  const max=existentes.length?Math.max(...existentes):0;
+  return 'EV'+String(max+1).padStart(3,'0');
+}
 function abrirModalPersonal(noEmpEdit,turnoDefault){
   const p=noEmpEdit?DB.personal.filter(x=>x.noEmp===noEmpEdit)[0]:null;
   const tOpts=TCAT.map(t=>'<option value="'+t+'"'+((p?p.turno:turnoDefault)===t?' selected':'')+'>'+TLBL[t]+'</option>').join('');
   const esPas=p&&p.tipo==='pasante';
   const esBaja=p&&p.activo==='0';
   const html=(esBaja?'<div style="background:#FEE2E2;color:#B91C1C;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:700;margin-bottom:12px">🚫 Este empleado está dado de baja'+(p.fechaBaja?' desde el '+p.fechaBaja:'')+'. Su historial se conserva; puedes reactivarlo abajo.</div>':'')
-    +'<div class="fr2"><div class="fr"><label class="fl">No. Empleado *</label><input id="fn" class="fi" value="'+(p?p.noEmp:'')+'" placeholder="46098" '+(p?'readonly':'')+'></div>'
+    +'<div class="fr2"><div class="fr"><label class="fl" id="lbl-fn">No. Empleado *</label><input id="fn" class="fi" value="'+(p?p.noEmp:'')+'" placeholder="46098" '+(p?'readonly':'')+'></div>'
     +'<div class="fr"><label class="fl">Tipo *</label><select id="ft" class="fs" onchange="document.getElementById(\'ffr\').style.opacity=this.value===\'pasante\'?\'1\':\'0.4\'">'
     +'<option value="base"'+(!esPas?' selected':'')+'>Base</option><option value="pasante"'+(esPas?' selected':'')+'>Pasante</option></select></div></div>'
     +'<div class="fr"><label class="fl">Nombre completo *</label><input id="fno" class="fi" value="'+(p?p.nombre:'')+'" placeholder="APELLIDO Nombre"></div>'
-    +'<div class="fr2"><div class="fr"><label class="fl">Turno *</label><select id="ftu" class="fs">'+tOpts+'</select></div>'
+    +'<div class="fr2"><div class="fr"><label class="fl">Turno *</label><select id="ftu" class="fs" onchange="actualizarCamposPorTurno()">'+tOpts+'</select></div>'
     +'<div class="fr"><label class="fl">Puesto</label><input id="fpu" class="fi" value="'+(p?p.puesto:'')+'" placeholder="Enfermera..."></div></div>'
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha ingreso</label><input id="fi" class="fi" value="'+(p?p.fechaIngreso:'')+'" placeholder="DD.MM.AA"></div>'
     +'<div class="fr" id="ffr" style="'+(esPas?'':'opacity:.4')+'"><label class="fl">Fin rotación</label><input id="ffin" class="fi" value="'+(p&&p.finRotacion?p.finRotacion:'')+'" placeholder="DD.MM.AA"></div></div>'
+    +'<div id="nota-eventual" style="display:none;font-size:10px;color:#B45309;background:#FEF3C7;border-radius:6px;padding:6px 10px;margin-bottom:12px">ℹ️ El personal eventual no requiere No. Empleado oficial (se genera uno interno automático) y no se le calculan ni se le muestran días de vacaciones.</div>'
     +'<div class="fr"><label class="fl">Horario mixto (opcional)</label><input id="fhm" class="fi" value="'+serializarHorarioMixto(parseHorarioMixto(p?p.horarioMixto:''))+'" placeholder="sab:ja, dom:noct"></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Solo si esta persona se presenta en <b>más de un turno</b> según el día — formato <code>día:turno</code> separado por comas (días: dom, lun, mar, mie, jue, vie, sab). Si se llena, ella SOLO aparecerá en cada tabla los días indicados aquí (el turno de arriba sigue rigiendo antigüedad/vacaciones). Déjalo vacío si tiene un único turno normal.</div>';
   const extra=[];
@@ -865,10 +881,11 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     extra.push({lbl:'Eliminar todo',cls:'btn-danger',fn:()=>elimPersonal(noEmpEdit)});
   }
   abrirModal(p?(esBaja?'Editar empleado (de baja)':'Editar empleado'):'Nuevo empleado',html,()=>{
-    const noEmp=document.getElementById('fn').value.trim();
+    let noEmp=document.getElementById('fn').value.trim();
     const nombre=document.getElementById('fno').value.trim();
-    if(!noEmp||!nombre){toast('Completa los campos obligatorios');return;}
     const turno=document.getElementById('ftu').value;
+    if(!noEmp&&turno==='eventual'&&!noEmpEdit)noEmp=generarNoEmpEventual();
+    if(!noEmp||!nombre){toast('Completa los campos obligatorios');return;}
     const puesto=document.getElementById('fpu').value.trim();
     const fechaIngreso=document.getElementById('fi').value.trim();
     const tipo=document.getElementById('ft').value;
@@ -887,6 +904,7 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     }
     guardarLocal();cerrarModal();toast('✓ Empleado guardado');renderPag(PAG);syncPersonal(rec);
   },'Guardar',extra);
+  actualizarCamposPorTurno();
 }
 function editPersonal(n){abrirModalPersonal(n,null);}
 function darDeBajaPersonal(noEmp){
@@ -920,17 +938,38 @@ function elimPersonal(noEmp){
 // EVENTUAL
 // ══════════════════════════════════════════════════════════
 function abrirModalEventual(ev){
-  const html='<div class="fr"><label class="fl">Nombre del eventual *</label><input id="ev-n" class="fi" value="'+(ev?ev.nombre:'')+'" placeholder="Nombre completo"></div>'
+  const eventuales=DB.personal.filter(p=>p.turno==='eventual'&&p.activo!=='0').sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  // Compatibilidad con registros antiguos que solo tenían nombre libre (sin noEmp vinculado)
+  let noEmpActual = ev ? (ev.noEmp||'') : '';
+  if(ev && !noEmpActual && ev.nombre){
+    const match=eventuales.find(p=>p.nombre.trim().toUpperCase()===ev.nombre.trim().toUpperCase());
+    if(match)noEmpActual=match.noEmp;
+  }
+  let opcionLegacy='';
+  if(ev && ev.nombre && !eventuales.some(p=>p.noEmp===noEmpActual)){
+    opcionLegacy='<option value="legacy:'+ev.nombre.replace(/"/g,'')+'" selected>(sin catálogo) '+ev.nombre+'</option>';
+    noEmpActual='';
+  }
+  const pOpts=eventuales.map(p=>'<option value="'+p.noEmp+'"'+(p.noEmp===noEmpActual?' selected':'')+'>'+p.nombre+'</option>').join('');
+  const selectorHtml = eventuales.length||opcionLegacy
+    ? '<select id="ev-n" class="fs"><option value="">— Selecciona —</option>'+opcionLegacy+pOpts+'</select>'
+    : '<div style="font-size:11px;color:var(--txt3);border:1.5px dashed var(--bg3);border-radius:6px;padding:10px;text-align:center">Aún no hay personal eventual registrado en el catálogo.</div>';
+  const html='<div class="fr"><label class="fl">Personal eventual *</label>'+selectorHtml+'</div>'
+    +'<div style="font-size:10px;color:var(--az2);margin:-8px 0 12px;cursor:pointer" onclick="cerrarModal();rPin(()=>abrirModalPersonal(null,\'eventual\'))">+ Registrar nuevo eventual en el catálogo</div>'
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha *</label><input id="ev-f" type="date" class="fi" value="'+(ev?ev.fecha:'')+'"></div>'
     +'<div class="fr"><label class="fl">Área</label><input id="ev-a" class="fi" value="'+(ev?ev.area:'')+'" placeholder="UCI/UCIM..."></div></div>'
     +'<div class="fr"><label class="fl">Incidencia cubierta</label><input id="ev-ic" class="fi" value="'+(ev?ev.incidenciaCubierta:'')+'" placeholder="Ej. Incapacidad..."></div>'
     +'<div class="fr"><label class="fl">Observaciones</label><textarea id="ev-o" class="ft">'+(ev?ev.observacion:'')+'</textarea></div>';
   const extra=ev?[{lbl:'Eliminar',cls:'btn-danger',fn:()=>elimEventual(ev.id)}]:[];
   abrirModal(ev?'Editar eventual':'Registrar eventual',html,()=>{
-    const nombre=document.getElementById('ev-n').value.trim();
+    const selEl=document.getElementById('ev-n');
+    const selVal=selEl?selEl.value:'';
     const fecha=document.getElementById('ev-f').value;
-    if(!nombre||!fecha){toast('Completa nombre y fecha');return;}
-    const rec={nombre,fecha,area:document.getElementById('ev-a').value.trim(),incidenciaCubierta:document.getElementById('ev-ic').value.trim(),observacion:document.getElementById('ev-o').value.trim()};
+    if(!selVal||!fecha){toast('Selecciona el eventual y la fecha');return;}
+    let nombre,noEmp;
+    if(selVal.indexOf('legacy:')===0){nombre=selVal.slice(7);noEmp='';}
+    else{const per=DB.personal.filter(x=>x.noEmp===selVal)[0];if(!per){toast('Eventual no encontrado');return;}nombre=per.nombre;noEmp=per.noEmp;}
+    const rec={nombre,noEmp,fecha,area:document.getElementById('ev-a').value.trim(),incidenciaCubierta:document.getElementById('ev-ic').value.trim(),observacion:document.getElementById('ev-o').value.trim()};
     if(ev){rec.id=ev.id;const idx=DB.eventual.findIndex(e=>e.id===ev.id);if(idx>=0)DB.eventual[idx]=rec;}
     else{rec.id=String(NID++);DB.eventual.push(rec);}
     guardarLocal();cerrarModal();toast('✓ Eventual guardado');renderEventual();syncEventual(rec);
@@ -951,7 +990,7 @@ function renderEventual(){
   const grupos={};
   lista.forEach(e=>{
     const key=(e.nombre||'').trim().toUpperCase();
-    if(!grupos[key])grupos[key]={nombre:e.nombre,items:[]};
+    if(!grupos[key])grupos[key]={nombre:e.nombre,noEmp:e.noEmp,items:[]};
     grupos[key].items.push(e);
   });
   const claves=Object.keys(grupos).sort((a,b)=>a.localeCompare(b));
@@ -959,7 +998,7 @@ function renderEventual(){
   claves.forEach(key=>{
     const g=grupos[key];
     g.items.sort((a,b)=>a.fecha.localeCompare(b.fecha));
-    html+='<tr class="grp-hdr"><td colspan="6">👤 '+g.nombre+' <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">— '+g.items.length+' registro'+(g.items.length!==1?'s':'')+' en este período</span></td></tr>';
+    html+='<tr class="grp-hdr"><td colspan="6">👤 '+g.nombre+(g.noEmp?' <span class="emp" style="color:inherit;opacity:.7">· No. '+g.noEmp+'</span>':'')+' <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">— '+g.items.length+' registro'+(g.items.length!==1?'s':'')+' en este período</span></td></tr>';
     g.items.forEach(e=>{
       html+='<tr><td class="tl" style="padding-left:22px;color:var(--txt3)">↳</td><td class="tl">'+e.fecha+'</td><td class="tl">'+e.area+'</td><td class="tl">'+e.incidenciaCubierta+'</td><td class="tl" style="color:var(--txt3)">'+e.observacion+'</td>'
         +'<td><button class="btn btn-ghost" style="font-size:10px;padding:3px 7px" onclick="rPin(()=>abrirModalEventual(DB.eventual.filter(x=>x.id===\''+e.id+'\')[0]))">✏</button></td></tr>';
@@ -1091,7 +1130,7 @@ function calcVencimientos(umbralDias){
   umbralDias = umbralDias || 30;
   const hoy=new Date(); hoy.setHours(0,0,0,0);
   const lista=[];
-  DB.personal.filter(p=>p.tipo!=='pasante'&&p.activo!=='0').forEach(p=>{
+  DB.personal.filter(p=>p.tipo!=='pasante'&&p.turno!=='eventual'&&p.activo!=='0').forEach(p=>{
     const per=periodoVacActual(p.fechaIngreso);
     if(!per||!per.ingresoValido||per.anioServicio<1||!per.fin)return;
     const tomados=DB.incidencias.filter(i=>{
@@ -1157,7 +1196,7 @@ function renderAniversarios(){
 // VACACIONES — calendario + registro
 // ══════════════════════════════════════════════════════════
 function abrirModalVacacion(prefill){
-  const pOpts=DB.personal.filter(p=>p.activo!=='0').sort((a,b)=>a.nombre.localeCompare(b.nombre))
+  const pOpts=DB.personal.filter(p=>p.activo!=='0'&&p.turno!=='eventual').sort((a,b)=>a.nombre.localeCompare(b.nombre))
     .map(p=>'<option value="'+p.noEmp+'">'+p.nombre+' ('+(TLBL[p.turno]||p.turno)+')</option>').join('');
   const fPre=prefill&&prefill.fecha?prefill.fecha:'';
   const html='<div class="fr"><label class="fl">Empleado *</label><select id="vc-e" class="fs"><option value="">— Selecciona —</option>'+pOpts+'</select></div>'
@@ -1511,7 +1550,7 @@ function imprimirSolicitudVacacion(){
 
 function renderSaldoVac(){
   const ft=document.getElementById('sv-turno')?document.getElementById('sv-turno').value:'';
-  const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.activo!=='0'&&(!ft||p.turno===ft)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.turno!=='eventual'&&p.activo!=='0'&&(!ft||p.turno===ft)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   const body=document.getElementById('sv-body');
   if(!pers.length){body.innerHTML='<div class="empty">Sin personal</div>';return;}
   const hoy=new Date(); hoy.setHours(0,0,0,0);
@@ -1555,7 +1594,7 @@ function renderSaldoVac(){
 }
 function expCSVSaldoVac(){
   const ft=document.getElementById('sv-turno').value;
-  const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.activo!=='0'&&(!ft||p.turno===ft));
+  const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.turno!=='eventual'&&p.activo!=='0'&&(!ft||p.turno===ft));
   let csv='No.Emp,Nombre,Turno,Periodo,DiasCorresponden,DiasTomados,Saldo,DiasParaVencer\n';
   const hoy=new Date(); hoy.setHours(0,0,0,0);
   pers.forEach(p=>{
@@ -1789,7 +1828,7 @@ async function cargarDatos(){
       DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion)}));
     }
     if(Array.isArray(data.eventual)){
-      DB.eventual=data.eventual.map(e=>({id:str(e.id),nombre:str(e.nombre),fecha:fecha(e.fecha),area:str(e.area),incidenciaCubierta:str(e.incidenciaCubierta),observacion:str(e.observacion)}));
+      DB.eventual=data.eventual.map(e=>({id:str(e.id),nombre:str(e.nombre),noEmp:str(e.noEmp),fecha:fecha(e.fecha),area:str(e.area),incidenciaCubierta:str(e.incidenciaCubierta),observacion:str(e.observacion)}));
     }
     if(Array.isArray(data.textra)){
       DB.textra=data.textra.map(t=>({id:str(t.id),noEmp:str(t.noEmp),nombre:str(t.nombre),turno:str(t.turno),turnoCubierto:str(t.turnoCubierto),fecha:fecha(t.fecha),horas:parseFloat(t.horas)||0,motivo:str(t.motivo)}));

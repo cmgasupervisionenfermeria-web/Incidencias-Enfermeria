@@ -542,14 +542,16 @@ function esDescansoTurno(turno,fechaStr){
   return day===0||day===6;
 }
 // Divide un rango de fechas calendario en días hábiles (se marcan como
-// vacación) y días de descanso (se excluyen — no cuentan como día tomado).
-function diasVacacionEnRango(turno,fIniStr,fFinStr){
+// vacación, según el patrón REAL de esa persona — turno fijo, horario
+// mixto, permuta o días de asistencia individual) y días de descanso
+// (se excluyen — no cuentan como día tomado).
+function diasVacacionEnRango(p,fIniStr,fFinStr){
   const todos=[],habiles=[],descanso=[];
   let d=new Date(fIniStr+'T12:00:00'); const fEnd=new Date(fFinStr+'T12:00:00');
   while(d<=fEnd){
     const f=fStr(d.getFullYear(),d.getMonth(),d.getDate());
     todos.push(f);
-    (esDescansoTurno(turno,f)?descanso:habiles).push(f);
+    (celdaBloqueada(p,p.turno,f)?descanso:habiles).push(f);
     d.setDate(d.getDate()+1);
   }
   return{todos,habiles,descanso};
@@ -1580,9 +1582,10 @@ function abrirModalVacacion(prefill){
     if(!noEmp||!fIni||!fFin){toast('Completa todos los campos');return;}
     if(fFin<fIni){toast('La fecha fin debe ser igual o posterior a la de inicio');return;}
     const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
-    const rango=diasVacacionEnRango(p?p.turno:'',fIni,fFin);
+    if(!p){toast('Empleado no encontrado');return;}
+    const rango=diasVacacionEnRango(p,fIni,fFin);
     const fechas=rango.habiles;
-    if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+(p?p.nombre:noEmp)+' — no se registró nada');return;}
+    if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+p.nombre+' — no se registró nada');return;}
     const conflictos=fechas.filter(f=>DB.incidencias.some(i=>i.noEmp===noEmp&&i.fecha===f&&i.incidencia&&i.incidencia!=='V'));
     const aplicar=()=>{
       const batch=[];
@@ -1810,7 +1813,7 @@ function imprimirSolicitudVacacion(){
   if(!p){toast('Empleado no encontrado');return;}
 
   const fEnd=new Date(fFin+'T12:00:00');
-  const rango=diasVacacionEnRango(p.turno,fIni,fFin);
+  const rango=diasVacacionEnRango(p,fIni,fFin);
   const fechas=rango.habiles;
   if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+p.nombre+' — no hay nada que imprimir');return;}
 

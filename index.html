@@ -41,6 +41,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .tbl td{padding:4px 3px;text-align:center;border-bottom:1px solid var(--bg3);vertical-align:middle}
 .tbl td.tl{text-align:left;padding-left:10px}
 .tbl tr:hover{background:var(--bg)}
+/* Columnas fijas (No. Emp, Nombre) al hacer scroll horizontal — clave para móvil en tablas anchas */
+.tbl th:nth-child(1),.tbl td:nth-child(1){position:sticky;left:0;min-width:56px;max-width:56px}
+.tbl th:nth-child(2),.tbl td:nth-child(2){position:sticky;left:56px}
+.tbl th:nth-child(1),.tbl th:nth-child(2){z-index:6;background:var(--bg2)}
+.tbl td:nth-child(1),.tbl td:nth-child(2){z-index:4;background:#fff;box-shadow:2px 0 3px -2px rgba(0,0,0,.08)}
+.tbl tr:hover td:nth-child(1),.tbl tr:hover td:nth-child(2){background:var(--bg)}
+.tbl tr.alerta-row td:nth-child(1),.tbl tr.alerta-row td:nth-child(2){background:#FFF9F2}
+.tbl tr.alerta-ps td:nth-child(1),.tbl tr.alerta-ps td:nth-child(2){background:#FEF2F2}
+.tbl tr.grp-hdr td:nth-child(1),.tbl tr.grp-hdr td:nth-child(2){background:var(--az3)}
 .emp{font-family:monospace;font-size:10px;color:var(--txt3)}
 .nom{font-weight:600;color:var(--txt);font-size:11px}
 .pst{font-size:10px;color:var(--txt3)}
@@ -145,6 +154,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <button class="btn-pin" onclick="abrirPin()">🔒 PIN</button>
   </div>
 </nav>
+<div id="sync-banner" style="display:none;position:sticky;top:52px;z-index:90;background:#FEE2E2;color:#B91C1C;padding:6px 14px;font-size:11px;font-weight:700;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap">
+  <span id="sync-banner-txt"></span>
+  <button onclick="reintentarSync()" style="background:#B91C1C;color:#fff;border:none;border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:700">🔄 Reintentar ahora</button>
+</div>
 
 <div id="toast" class="toast"></div>
 <div id="ldr" class="ldr"><div class="lspin"></div><div class="ltxt" id="ltxt">Cargando...</div></div>
@@ -164,6 +177,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 <div class="page active" id="page-resumen">
   <div id="resumen-bloqueados" style="margin-bottom:14px"></div>
   <div id="resumen-vencimientos" style="margin-bottom:14px"></div>
+  <div id="resumen-especiales" style="margin-bottom:14px"></div>
   <div style="margin-bottom:14px">
     <div class="sec-t">🏠 Resumen quincenal</div>
     <div class="sec-s" id="resumen-fecha">...</div>
@@ -384,6 +398,8 @@ let PAG = 'resumen', pinOK=false, pinCB=null, filtP='';
 let SEL=[], MULTI=false;
 let DB = {personal:[],incidencias:[],eventual:[],textra:[],notas:[]};
 let NID = 1;
+let SYNC_QUEUE = [];
+const SYNC_KEY = 'inc_cmga_syncqueue';
 
 // ══════════════════════════════════════════════════════════
 // GAS — fetch simple igual al Censo Hospitalario
@@ -395,7 +411,54 @@ async function apiCall(params) {
   try {
     const r = await fetch(GAS + '?' + p.toString());
     return await r.json();
-  } catch(e) { console.error('apiCall error:', e); return {ok:false}; }
+  } catch(e) { console.error('apiCall error:', e); encolarSyncFallido(params); return {ok:false}; }
+}
+// ══════════════════════════════════════════════════════════
+// COLA DE REINTENTO — si un guardado no llega a Google Sheets
+// (sin señal, GAS caído, etc.) se guarda aquí para no perderlo
+// silenciosamente. Persiste en localStorage y se puede reintentar
+// manualmente o automáticamente al recuperar conexión.
+// ══════════════════════════════════════════════════════════
+function cargarColaSync(){
+  try{ SYNC_QUEUE=JSON.parse(localStorage.getItem(SYNC_KEY)||'[]'); }catch(e){ SYNC_QUEUE=[]; }
+}
+function guardarColaSync(){
+  try{ localStorage.setItem(SYNC_KEY, JSON.stringify(SYNC_QUEUE)); }catch(e){}
+}
+function encolarSyncFallido(params){
+  SYNC_QUEUE.push({id:'q'+Date.now()+Math.random().toString(36).slice(2,7), params, ts:new Date().toISOString()});
+  guardarColaSync();
+  actualizarBannerSync();
+}
+async function reintentarSync(silencioso){
+  if(!SYNC_QUEUE.length){ if(!silencioso)toast('No hay cambios pendientes'); return; }
+  if(!silencioso)toast('🔄 Reintentando '+SYNC_QUEUE.length+' cambio'+(SYNC_QUEUE.length!==1?'s':'')+'…');
+  const pendientes=SYNC_QUEUE.slice();
+  for(const item of pendientes){
+    try{
+      const p=new URLSearchParams();
+      Object.keys(item.params).forEach(k=>p.append(k,item.params[k]));
+      const r=await fetch(GAS+'?'+p.toString());
+      await r.json();
+      SYNC_QUEUE=SYNC_QUEUE.filter(x=>x.id!==item.id);
+    }catch(e){ /* sigue en la cola */ }
+  }
+  guardarColaSync();
+  actualizarBannerSync();
+  if(!silencioso){
+    if(!SYNC_QUEUE.length) toast('✓ Todo sincronizado con Google Sheets');
+    else toast('⚠ '+SYNC_QUEUE.length+' cambio'+(SYNC_QUEUE.length!==1?'s':'')+' sin poder sincronizar — revisa tu conexión');
+  }
+}
+function actualizarBannerSync(){
+  const el=document.getElementById('sync-banner');
+  if(!el)return;
+  if(SYNC_QUEUE.length){
+    el.style.display='flex';
+    document.getElementById('sync-banner-txt').textContent='⚠ '+SYNC_QUEUE.length+' cambio'+(SYNC_QUEUE.length!==1?'s':'')+' sin sincronizar con Google Sheets — se quedaron solo en este dispositivo';
+  } else {
+    el.style.display='none';
+  }
 }
 async function syncIncsBatch(registros) {
   if(!registros.length)return; guardarLocal();
@@ -571,6 +634,32 @@ function esDiaAplicable(p,turno,fechaStr){
   const dia=DIAS3[new Date(fechaStr+'T12:00:00').getDay()];
   return hm[turno].indexOf(dia)!==-1;
 }
+// Para reportes agregados por mes/año (Concentrado, Historial Anual): solo
+// incluir a alguien bajo un turno que no es el suyo si su permuta/horario
+// mixto realmente se traslapa con ese mes o año — evita filas vacías de
+// alguien cuya permuta cae en otro período distinto al que se está viendo.
+function perteneceATurnoEnMes(p,turno,mes,anio){
+  if(p.turno===turno)return true;
+  const hm=parseHorarioMixto(p.horarioMixto);
+  if(hm&&hm[turno])return true;
+  const perms=parsePermutas(p.permuta);
+  if(perms){
+    const inicioMes=fStr(anio,mes,1),finMes=fStr(anio,mes,new Date(anio,mes+1,0).getDate());
+    return perms.some(pm=>pm.turno===turno&&pm.fIni<=finMes&&pm.fFin>=inicioMes);
+  }
+  return false;
+}
+function perteneceATurnoEnAnio(p,turno,anio){
+  if(p.turno===turno)return true;
+  const hm=parseHorarioMixto(p.horarioMixto);
+  if(hm&&hm[turno])return true;
+  const perms=parsePermutas(p.permuta);
+  if(perms){
+    const inicioAnio=fStr(anio,0,1),finAnio=fStr(anio,11,31);
+    return perms.some(pm=>pm.turno===turno&&pm.fIni<=finAnio&&pm.fFin>=inicioAnio);
+  }
+  return false;
+}
 function lblQ(mes,anio,q){
   if(q===1)return '11 – 25 de '+MESES[mes]+' '+anio;
   const ms=mes===11?0:mes+1,as=mes===11?anio+1:anio;
@@ -628,7 +717,7 @@ function calcAlertas(turno,mes,anio){
   DB.personal.filter(p=>perteneceATurno(p,turno)&&p.activo!=='0').forEach(p=>{
     const inc=DB.incidencias.filter(i=>{
       const d=new Date(i.fecha+'T12:00:00');
-      return i.noEmp===p.noEmp&&d.getMonth()===mes&&d.getFullYear()===anio;
+      return i.noEmp===p.noEmp&&d.getMonth()===mes&&d.getFullYear()===anio&&esDiaAplicable(p,turno,i.fecha);
     });
     const m=inc.filter(i=>i.incidencia==='M').length;
     const ps=inc.filter(i=>i.incidencia==='Ps'||i.incidencia==='Pe').length;
@@ -1130,8 +1219,14 @@ function renderPersonal(){
   lista.forEach(p=>{
     const tr=document.createElement('tr');
     if(p.activo==='0')tr.style.opacity='.6';
+    const hm=parseHorarioMixto(p.horarioMixto);
+    const perms=parsePermutas(p.permuta);
+    let badges='';
+    if(p.activo==='0')badges+=' <span style="color:#B91C1C;font-size:9px;font-weight:700">🚫 BAJA'+(p.fechaBaja?' · '+p.fechaBaja:'')+'</span>';
+    if(hm)badges+=' <span style="background:#EEF2FF;color:#4F46E5;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="'+serializarHorarioMixto(hm)+'">↔ mixto</span>';
+    if(perms)perms.forEach(pm=>{badges+=' <span style="background:#F3E8FF;color:#7E22CE;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="Permuta a '+(TLBL[pm.turno]||pm.turno)+' del '+pm.fIni+' al '+pm.fFin+'">🔄 '+(TLBL[pm.turno]||pm.turno)+' hasta '+pm.fFin.slice(8,10)+'/'+pm.fFin.slice(5,7)+'</span>';});
     tr.innerHTML='<td class="tl"><span class="emp">'+p.noEmp+'</span></td>'
-      +'<td class="tl"><span class="nom">'+p.nombre+(p.activo==='0'?' <span style="color:#B91C1C;font-size:9px;font-weight:700">🚫 BAJA'+(p.fechaBaja?' · '+p.fechaBaja:'')+'</span>':'')+'</span></td>'
+      +'<td class="tl"><span class="nom">'+p.nombre+badges+'</span></td>'
       +'<td class="tl"><span class="pst">'+p.puesto+'</span></td>'
       +'<td class="tl"><span class="tbadge">'+(TLBL[p.turno]||p.turno)+'</span></td>'
       +'<td class="tl"><span class="ing">'+p.fechaIngreso+'</span></td><td></td>';
@@ -1196,6 +1291,7 @@ function renderResumen(){
   renderAniversarios();
   renderBloqueados();
   renderVencimientos();
+  renderHorariosEspeciales();
 }
 // ══════════════════════════════════════════════════════════
 // PRÓXIMO DESBLOQUEO — empleados con Falta activa (bloqueo M/Ps/Pe vigente)
@@ -1261,6 +1357,38 @@ function renderVencimientos(){
   el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⏳ Periodos vacacionales por vencer (≤30 días) sin agotar</div>'
     +lista.map(v=>'<div class="ai" style="background:'+(v.diasRestantes<=7?'var(--rojo2)':'var(--naranja2)')+';border-left:3px solid '+(v.diasRestantes<=7?'var(--rojo)':'var(--naranja)')+'">'
       +(v.diasRestantes<=7?'🔴':'🟠')+' <b>'+v.nombre+'</b> <span style="color:var(--txt3)">('+TLBL[v.turno]+')</span> — le quedan <b>'+v.saldo+' día'+(v.saldo!==1?'s':'')+'</b> sin tomar · vence el <b>'+v.vence+'</b> <span style="color:var(--txt3)">('+v.diasRestantes+' día'+(v.diasRestantes!==1?'s':'')+' restante'+(v.diasRestantes!==1?'s':'')+')</span></div>').join('')+'</div>';
+}
+// ══════════════════════════════════════════════════════════
+// HORARIOS ESPECIALES VIGENTES — vista rápida de quién anda con
+// horario mixto o permuta activa, para que cualquiera (no solo
+// quien lo capturó) lo entienda de un vistazo sin revisar tabla
+// por tabla.
+// ══════════════════════════════════════════════════════════
+function renderHorariosEspeciales(){
+  const el=document.getElementById('resumen-especiales');
+  if(!el)return;
+  const hoyStr=fStr(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
+  const filas=[];
+  DB.personal.filter(p=>p.activo!=='0').forEach(p=>{
+    const hm=parseHorarioMixto(p.horarioMixto);
+    if(hm)filas.push({tipo:'mixto',nombre:p.nombre,turno:p.turno,detalle:serializarHorarioMixto(hm)});
+    const perms=parsePermutas(p.permuta);
+    if(perms)perms.forEach(pm=>{
+      const vigente=hoyStr>=pm.fIni&&hoyStr<=pm.fFin;
+      const futura=hoyStr<pm.fIni;
+      if(hoyStr>pm.fFin)return; // ya terminó, no mostrar
+      filas.push({tipo:'permuta',nombre:p.nombre,turno:p.turno,detalle:'a '+(TLBL[pm.turno]||pm.turno)+' del '+pm.fIni+' al '+pm.fFin,vigente,futura});
+    });
+  });
+  if(!filas.length){el.innerHTML='';return;}
+  filas.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🔀 Horarios especiales vigentes</div>'
+    +filas.map(f=>{
+      const icono=f.tipo==='mixto'?'↔':(f.futura?'📅':'🔄');
+      const bg=f.tipo==='mixto'?'#EEF2FF':'#F3E8FF', color=f.tipo==='mixto'?'#4F46E5':'#7E22CE';
+      const estado=f.tipo==='permuta'?(f.futura?' <span style="color:var(--txt3)">(próxima)</span>':' <span style="color:#15803D;font-weight:700">(vigente)</span>'):'';
+      return '<div class="ai" style="background:'+bg+';border-left:3px solid '+color+'">'+icono+' <b>'+f.nombre+'</b> <span style="color:var(--txt3)">('+(TLBL[f.turno]||f.turno)+')</span> — '+(f.tipo==='mixto'?'horario mixto: '+f.detalle:'permuta '+f.detalle)+estado+'</div>';
+    }).join('')+'</div>';
 }
 function parseFechaIngreso(str){
   if(!str)return null;
@@ -1455,13 +1583,13 @@ function renderConc(){
   TURNOS.forEach(t=>{if(!ft||ft===t)alT.push(...calcAlertas(t,mes,anio));});
   const alEl=document.getElementById('conc-al');
   alEl.innerHTML=alT.length?'<div class="ap">'+alT.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+'</div>').join('')+'</div>':'';
-  const pers=DB.personal.filter(p=>!ft||p.turno===ft).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const pers=DB.personal.filter(p=>!ft||perteneceATurnoEnMes(p,ft,mes,anio)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   const tipos=['F','R','I','V','M','B','Ps','Pe','LC','L','F4H','F8H'];
   let html='<div class="card"><div class="wrap"><table class="tbl"><thead><tr><th class="tl">No.Emp</th><th class="tl" style="min-width:150px">Nombre</th><th class="tl">Turno</th>';
   tipos.forEach(t=>html+='<th>'+t+'</th>');
   html+='<th>Total</th></tr></thead><tbody>';
   pers.forEach(p=>{
-    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getMonth()===mes&&d.getFullYear()===anio;});
+    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getMonth()===mes&&d.getFullYear()===anio&&(!ft||esDiaAplicable(p,ft,i.fecha));});
     const cnt={};tipos.forEach(t=>cnt[t]=0);
     inc.forEach(i=>{if(cnt[i.incidencia]!==undefined)cnt[i.incidencia]++;});
     const tot=Object.values(cnt).reduce((s,v)=>s+v,0);
@@ -1749,13 +1877,13 @@ function renderHistorial(){
   initHistorialSelectAnio();
   const anio=parseInt(document.getElementById('h-anio').value);
   const ft=document.getElementById('h-turno').value;
-  const pers=DB.personal.filter(p=>!ft||p.turno===ft).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const pers=DB.personal.filter(p=>!ft||perteneceATurnoEnAnio(p,ft,anio)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   const body=document.getElementById('h-body');
   if(!pers.length){body.innerHTML='<div class="empty">Sin personal</div>';return;}
   const tipos=['F','R','I','V','M','B','Ps','Pe','LC','L'];
   let filas='';
   pers.forEach(p=>{
-    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getFullYear()===anio;});
+    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getFullYear()===anio&&(!ft||esDiaAplicable(p,ft,i.fecha));});
     const cnt={};tipos.forEach(t=>cnt[t]=0);
     inc.forEach(i=>{if(cnt[i.incidencia]!==undefined)cnt[i.incidencia]++;});
     const tot=Object.values(cnt).reduce((s,v)=>s+v,0);
@@ -1775,8 +1903,8 @@ function expCSVHistorial(){
   const ft=document.getElementById('h-turno').value;
   const tipos=['F','R','I','V','M','B','Ps','Pe','LC','L'];
   let csv='No.Emp,Nombre,Turno,'+tipos.join(',')+',Total\n';
-  DB.personal.filter(p=>!ft||p.turno===ft).forEach(p=>{
-    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getFullYear()===anio;});
+  DB.personal.filter(p=>!ft||perteneceATurnoEnAnio(p,ft,anio)).forEach(p=>{
+    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getFullYear()===anio&&(!ft||esDiaAplicable(p,ft,i.fecha));});
     const cnt={};tipos.forEach(t=>cnt[t]=0);inc.forEach(i=>{if(cnt[i.incidencia]!==undefined)cnt[i.incidencia]++;});
     const tot=Object.values(cnt).reduce((s,v)=>s+v,0);
     if(!tot)return;
@@ -1869,8 +1997,8 @@ function expCSVConc(){
   const mes=parseInt(document.getElementById('c-mes').value),anio=parseInt(document.getElementById('c-anio').value),ft=document.getElementById('c-turno').value;
   const tipos=['F','R','I','V','M','B','Ps','Pe','LC','L','F4H','F8H'];
   let csv='No.Emp,Nombre,Turno,'+tipos.join(',')+',Total\n';
-  DB.personal.filter(p=>!ft||p.turno===ft).forEach(p=>{
-    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getMonth()===mes&&d.getFullYear()===anio;});
+  DB.personal.filter(p=>!ft||perteneceATurnoEnMes(p,ft,mes,anio)).forEach(p=>{
+    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getMonth()===mes&&d.getFullYear()===anio&&(!ft||esDiaAplicable(p,ft,i.fecha));});
     const cnt={};tipos.forEach(t=>cnt[t]=0);inc.forEach(i=>{if(cnt[i.incidencia]!==undefined)cnt[i.incidencia]++;});
     const tot=Object.values(cnt).reduce((s,v)=>s+v,0);
     csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+','+tipos.map(t=>cnt[t]).join(',')+','+tot+'\n';
@@ -1937,6 +2065,7 @@ function recalcNid(){
 
 async function cargarDatos(){
   try{ cargarLocal(); recalcNid(); }catch(e){}
+  cargarColaSync(); actualizarBannerSync();
   actualizarLabels();
   renderPag(PAG);
   showLdr('🔄 Sincronizando con Google Sheets…');
@@ -1971,6 +2100,8 @@ async function cargarDatos(){
 }
 
 document.addEventListener('DOMContentLoaded', cargarDatos);
+window.addEventListener('online', ()=>reintentarSync(true));
+setInterval(()=>{ if(SYNC_QUEUE.length) reintentarSync(true); }, 45000);
 </script>
 </body>
 </html>

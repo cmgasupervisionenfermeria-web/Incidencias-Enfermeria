@@ -318,7 +318,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 <div class="page" id="page-personal">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:10px">
     <div><div class="sec-t">👥 Catálogo de Personal</div><div class="sec-s">Gestión del personal por turno</div></div>
-    <button class="btn btn-primary" onclick="rPin(()=>abrirModalPersonal(null,null))">+ Nuevo empleado</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-ghost" onclick="rPin(()=>abrirImportarAsistencia())">📋 Importar días de asistencia</button>
+      <button class="btn btn-primary" onclick="rPin(()=>abrirModalPersonal(null,null))">+ Nuevo empleado</button>
+    </div>
   </div>
   <div class="chips">
     <button class="chip active" onclick="filtPersonal('',this)">Todos</button>
@@ -586,6 +589,44 @@ function permutaActivaEnFecha(p,fechaStr){
 }
 
 // ══════════════════════════════════════════════════════════
+// DÍAS DE ASISTENCIA INDIVIDUAL — para turnos sin patrón fijo
+// (Nocturno, Supervisoras): se guarda en p.diasAsistencia como
+// "lun, mie, vie" — los días que SÍ asiste. El resto de días de
+// su tabla se sombrean como descanso (igual que horario mixto).
+// También acepta el token "festivos" (asiste en cualquier día
+// festivo oficial, sin importar qué día de la semana caiga).
+// Si no se define, no se asume nada (no se sombrea).
+// ══════════════════════════════════════════════════════════
+function parseDiasAsistencia(str){
+  if(!str||!String(str).trim())return null;
+  const out=[];
+  String(str).split(/[,;]/).forEach(tok=>{
+    const raw=tok.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const dia=raw.indexOf('fes')===0?'fes':raw.slice(0,3);
+    if((DIAS3.indexOf(dia)!==-1||dia==='fes')&&out.indexOf(dia)===-1)out.push(dia);
+  });
+  return out.length?out:null;
+}
+const DIA_ETIQUETA={dom:'dom',lun:'lun',mar:'mar',mie:'mie',jue:'jue',vie:'vie',sab:'sab',fes:'festivos'};
+function serializarDiasAsistencia(arr){
+  return arr?arr.map(d=>DIA_ETIQUETA[d]||d).join(', '):'';
+}
+// ¿Debe quedar bloqueada (sombreada, no clickeable) esta celda para esta
+// persona, este turno, esta fecha? — combina horario mixto/permuta,
+// patrón individual (noct/sup) y patrón fijo del turno (tmat/vesp/ja).
+function celdaBloqueada(p,turno,fechaStr){
+  if(!esDiaAplicable(p,turno,fechaStr))return true; // no es su turno ese día
+  const diasAsis=parseDiasAsistencia(p.diasAsistencia);
+  if(diasAsis){
+    const dia=DIAS3[new Date(fechaStr+'T12:00:00').getDay()];
+    const asiste=diasAsis.indexOf(dia)!==-1||(diasAsis.indexOf('fes')!==-1&&esDiaFestivoOficialMX(fechaStr));
+    return !asiste;
+  }
+  if(turno==='tmat'||turno==='vesp'||turno==='ja')return esDescansoTurno(turno,fechaStr);
+  return false; // noct/sup/eventual sin patrón individual definido: sin asumir nada
+}
+
+// ══════════════════════════════════════════════════════════
 // HORARIO MIXTO — personal que se presenta en más de un turno
 // según el día de la semana (p.ej. sábado en J.Acumulada y
 // domingo en Nocturno). Se guarda en p.horarioMixto como texto
@@ -781,12 +822,12 @@ function renderTurno(turno){
     dias.forEach(d=>{
       const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===d.fecha)[0];
       const inc=io?io.incidencia:'';
-      if(!esDiaAplicable(p,turno,d.fecha)){
-        celdas+='<td class="ic-na" title="'+p.nombre+' no tiene turno aquí este día"></td>';
+      if(celdaBloqueada(p,turno,d.fecha)&&!inc){
+        const razon=!esDiaAplicable(p,turno,d.fecha)?p.nombre+' no tiene turno aquí este día':p.nombre+' — día de descanso';
+        celdas+='<td class="ic-na" title="'+razon+'"></td>';
         return;
       }
-      const dw=dow(d.fecha),fin=esDescansoTurno(turno,d.fecha);
-      const cls=inc?clsInc(inc):(fin?'ic-DIA':'ic-vacio');
+      const cls=inc?clsInc(inc):'ic-vacio';
       celdas+='<td class="ic '+cls+'" data-emp="'+p.noEmp+'" data-fecha="'+d.fecha+'" data-turno="'+turno+'" onclick="clickCell(this)" title="'+d.fecha+'">'+(inc||'')+'</td>';
     });
     let badgeCruzado='';
@@ -1063,7 +1104,9 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     +'<div class="fr"><label class="fl">Horario mixto (opcional)</label><input id="fhm" class="fi" value="'+serializarHorarioMixto(parseHorarioMixto(p?p.horarioMixto:''))+'" placeholder="sab:ja, dom:noct"></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Solo si esta persona se presenta en <b>más de un turno</b> según el día — formato <code>día:turno</code> separado por comas (días: dom, lun, mar, mie, jue, vie, sab). Si se llena, ella SOLO aparecerá en cada tabla los días indicados aquí (el turno de arriba sigue rigiendo antigüedad/vacaciones). Déjalo vacío si tiene un único turno normal.</div>'
     +'<div class="fr"><label class="fl">Permuta temporal (opcional)</label><input id="fperm" class="fi" value="'+serializarPermutas(parsePermutas(p?p.permuta:''))+'" placeholder="ja:2026-09-01 a 2026-09-30"></div>'
-    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Para un <b>cambio de turno temporal</b> con un compañero (p.ej. un mes completo) — formato <code>turno:AAAA-MM-DD a AAAA-MM-DD</code>. Mientras esté vigente, aparecerá TODOS los días en ese turno y no en el de arriba; al pasar la fecha, regresa sola a su turno normal. No mueve ni borra ninguna incidencia ya registrada, ni afecta antigüedad/vacaciones.</div>';
+    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Para un <b>cambio de turno temporal</b> con un compañero (p.ej. un mes completo) — formato <code>turno:AAAA-MM-DD a AAAA-MM-DD</code>. Mientras esté vigente, aparecerá TODOS los días en ese turno y no en el de arriba; al pasar la fecha, regresa sola a su turno normal. No mueve ni borra ninguna incidencia ya registrada, ni afecta antigüedad/vacaciones.</div>'
+    +'<div class="fr"><label class="fl">Días de asistencia (opcional — Nocturno/Supervisoras)</label><input id="fda" class="fi" value="'+serializarDiasAsistencia(parseDiasAsistencia(p?p.diasAsistencia:''))+'" placeholder="lun, mie, vie"></div>'
+    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Matutino, Vespertino y J. Acumulada ya se sombrean solos por su patrón fijo. Para Nocturno y Supervisoras, que no tienen patrón fijo, indica aquí en qué días SÍ asiste — el resto de su fila se sombrea como descanso (bloqueado, igual que horario mixto). Días: dom, lun, mar, mie, jue, vie, sab, festivos (asiste cualquier día festivo oficial, sin importar el día de semana). Vacío = sin sombrear ningún día.</div>';
   const extra=[];
   if(p){
     if(esBaja) extra.push({lbl:'↩️ Reactivar',cls:'btn-ghost',fn:()=>reactivarPersonal(noEmpEdit)});
@@ -1088,7 +1131,11 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     const permParsed=parsePermutas(permRaw);
     if(permRaw&&!permParsed){toast('⚠ Formato de permuta no reconocido — revisa el ejemplo (ja:2026-09-01 a 2026-09-30)');return;}
     const permuta=permParsed?serializarPermutas(permParsed):'';
-    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):''),horarioMixto,permuta};
+    const daRaw=document.getElementById('fda').value.trim();
+    const daParsed=parseDiasAsistencia(daRaw);
+    if(daRaw&&!daParsed){toast('⚠ Formato de días de asistencia no reconocido — usa dom, lun, mar, mie, jue, vie, sab');return;}
+    const diasAsistencia=daParsed?serializarDiasAsistencia(daParsed):'';
+    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):''),horarioMixto,permuta,diasAsistencia};
     if(noEmpEdit){
       const idx=DB.personal.findIndex(x=>x.noEmp===noEmpEdit);
       if(idx>=0){rec.id=DB.personal[idx].id;DB.personal[idx]=rec;}
@@ -1225,6 +1272,8 @@ function renderPersonal(){
     if(p.activo==='0')badges+=' <span style="color:#B91C1C;font-size:9px;font-weight:700">🚫 BAJA'+(p.fechaBaja?' · '+p.fechaBaja:'')+'</span>';
     if(hm)badges+=' <span style="background:#EEF2FF;color:#4F46E5;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="'+serializarHorarioMixto(hm)+'">↔ mixto</span>';
     if(perms)perms.forEach(pm=>{badges+=' <span style="background:#F3E8FF;color:#7E22CE;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="Permuta a '+(TLBL[pm.turno]||pm.turno)+' del '+pm.fIni+' al '+pm.fFin+'">🔄 '+(TLBL[pm.turno]||pm.turno)+' hasta '+pm.fFin.slice(8,10)+'/'+pm.fFin.slice(5,7)+'</span>';});
+    const diasAsis=parseDiasAsistencia(p.diasAsistencia);
+    if(diasAsis)badges+=' <span style="background:#F1F5F9;color:#475569;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="Asiste: '+serializarDiasAsistencia(diasAsis)+' — el resto se sombrea como descanso">📅 '+diasAsis.map(d=>DIA_ETIQUETA[d]||d).join('/')+'</span>';
     tr.innerHTML='<td class="tl"><span class="emp">'+p.noEmp+'</span></td>'
       +'<td class="tl"><span class="nom">'+p.nombre+badges+'</span></td>'
       +'<td class="tl"><span class="pst">'+p.puesto+'</span></td>'
@@ -1234,6 +1283,87 @@ function renderPersonal(){
     (ne=>{btn.onclick=()=>rPin(()=>editPersonal(ne));})(p.noEmp);
     tr.lastElementChild.appendChild(btn);tb.appendChild(tr);
   });
+}
+
+// ══════════════════════════════════════════════════════════
+// IMPORTAR DÍAS DE ASISTENCIA — captura masiva por nombre, para
+// no tener que editar persona por persona en Nocturno/Supervisoras.
+// ══════════════════════════════════════════════════════════
+function normalizarNombrePersona(s){
+  return String(s||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+}
+function abrirImportarAsistencia(){
+  const datosSugeridos=[
+    'ADRIANA JEANNETTE ESQUIVEL LÓPEZ: lun, mie, vie',
+    'NORMA PATRICIA SANCHEZ RODRIGUEZ: mar, jue, dom',
+    'JOHANA LIZETH MELENDEZ ACOSTA: lun, mar, mie, jue, vie',
+    'FANNY MONSERRAT RANGEL LOPEZ: lun, mar, mie, jue, vie, sab',
+    'FERNANDO RAMIREZ SOLIS: sab, dom, festivos',
+    'MARISOL BECERRA MURILLO: lun, mie, vie',
+    'ALAN CUAUHTEMOC NAJERA LARIOS: lun, mie, vie',
+    'MERCEDES JOCELYN FLORES BRIANO: lun, mie, sab',
+    'YESSICA FERNANDA REYES SANCHEZ: mie, vie, dom',
+    'LAURA REBECA SANTOS MORENO: mar, jue, sab',
+    'PAULA PATRICIA ARROYO HERNANDEZ: mar, jue, dom',
+    'ELIZABETH GUADALUPE RONDAN CERVANTES: lun, jue, sab',
+    'MICHELLE ALEXANDRA ESPARZA PLASCENCIA: lun, jue, sab',
+    'DULCE MARIA ESQUIVEL HERNANDEZ: mar, jue, dom',
+    'ANAHÍ MARLENE BLANCO ALVARADO: lun, vie, dom',
+    'ERICK YAMIL ADAME RODRIGUEZ: lun, mie, vie',
+    'RUTH ALEJANDRA JIMENEZ FLORES: mar, jue, sab',
+    'CITLALI GUADALUPE LOPEZ BARCENAS: mar, vie, dom',
+    'MIRIAM ALEJANDRA LOPEZ RAMOS: lun, mie, vie',
+    'ANDREA SABAS SANCHEZ: lun, mie, vie',
+    'ALMA STEPHANIE LOPEZ CASTAÑEDA: lun, mie, sab',
+    'YESSICA JANETH HERNANDEZ ESQUIVEL: mie, vie, dom',
+    'LUIS FERNANDO SERRANO PEREZ: mar, jue, sab',
+    'MIRIAM LIZBETH GOMEZ MEDRANO: lun, jue, sab',
+    'ADRIAN EMMANUEL MEDINA CERVANTES: mar, jue, sab',
+    'DANIELA MONSERRAT MORALES DAVILA: mar, vie, dom',
+    'LISSANDRO MORA ESPARZA: mar, jue, dom',
+    'ALAN ROLANDO DE LOERA LOPEZ: mar, vie, dom',
+    'ERASMO CESAR ARANDA FIGUEROA: lun, jue, sab'
+  ].join('\n');
+  const html='<div class="fr"><label class="fl">Lista (una persona por línea)</label>'
+    +'<textarea id="imp-asis" class="ft" rows="14" style="font-family:monospace;font-size:10.5px;white-space:pre">'+datosSugeridos+'</textarea></div>'
+    +'<div style="font-size:10px;color:var(--txt3)">Formato: <code>Nombre completo: días</code> (días separados por coma — dom, lun, mar, mie, jue, vie, sab, festivos). Ya dejé precargada la lista de Supervisoras y Nocturno que me compartiste; revísala o corrígela y presiona Aplicar. Empareja por nombre exacto con el catálogo (sin importar mayúsculas/acentos) — si alguien no coincide, se avisa al final para revisarlo a mano.</div>';
+  abrirModal('📋 Importar días de asistencia',html,procesarImportarAsistencia,'Aplicar');
+}
+function procesarImportarAsistencia(){
+  const raw=document.getElementById('imp-asis').value;
+  const lineas=raw.split('\n').map(l=>l.trim()).filter(l=>l);
+  let actualizados=0;
+  const noEncontrados=[],formatoInvalido=[],ambiguos=[];
+  lineas.forEach(linea=>{
+    const idx=linea.indexOf(':');
+    if(idx===-1){formatoInvalido.push(linea);return;}
+    const nombreRaw=linea.slice(0,idx).trim();
+    const diasRaw=linea.slice(idx+1).trim();
+    const diasParsed=parseDiasAsistencia(diasRaw);
+    if(!diasParsed){formatoInvalido.push(linea);return;}
+    const nombreNorm=normalizarNombrePersona(nombreRaw);
+    const coincidencias=DB.personal.filter(p=>normalizarNombrePersona(p.nombre)===nombreNorm);
+    if(!coincidencias.length){noEncontrados.push(nombreRaw);return;}
+    if(coincidencias.length>1){ambiguos.push(nombreRaw);return;}
+    const persona=coincidencias[0];
+    const rec=Object.assign({},persona,{diasAsistencia:serializarDiasAsistencia(diasParsed)});
+    const i=DB.personal.findIndex(x=>x.noEmp===persona.noEmp);
+    if(i>=0)DB.personal[i]=rec;
+    syncPersonal(rec);
+    actualizados++;
+  });
+  guardarLocal();cerrarModal();renderPag(PAG);
+  if(noEncontrados.length||formatoInvalido.length||ambiguos.length){
+    let detalle='<div style="font-size:12px;line-height:1.7">'
+      +'<p>✓ Se actualizaron <b>'+actualizados+'</b> persona'+(actualizados!==1?'s':'')+' correctamente.</p>';
+    if(noEncontrados.length)detalle+='<p style="color:var(--rojo);font-weight:700;margin-top:10px">⚠ No encontradas en el catálogo ('+noEncontrados.length+') — revisa que el nombre esté escrito igual que en Personal:</p><ul style="margin:4px 0 0 18px">'+noEncontrados.map(n=>'<li>'+n+'</li>').join('')+'</ul>';
+    if(ambiguos.length)detalle+='<p style="color:var(--naranja);font-weight:700;margin-top:10px">⚠ Hay más de una persona con ese nombre ('+ambiguos.length+') — edítalas manualmente:</p><ul style="margin:4px 0 0 18px">'+ambiguos.map(n=>'<li>'+n+'</li>').join('')+'</ul>';
+    if(formatoInvalido.length)detalle+='<p style="color:var(--naranja);font-weight:700;margin-top:10px">⚠ Renglón con formato no reconocido ('+formatoInvalido.length+'):</p><ul style="margin:4px 0 0 18px">'+formatoInvalido.map(n=>'<li>'+n+'</li>').join('')+'</ul>';
+    detalle+='</div>';
+    abrirModal('Resultado de la importación',detalle,null,'');
+  } else {
+    toast('✓ '+actualizados+' persona'+(actualizados!==1?'s':'')+' actualizada'+(actualizados!==1?'s':'')+' con sus días de asistencia');
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2077,7 +2207,7 @@ async function cargarDatos(){
     const str = v=>(v!==null&&v!==undefined)?String(v):'';
     const fecha = v=>v?String(v).substring(0,10):'';
     if(Array.isArray(data.personal)&&data.personal.length>0){
-      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja),horarioMixto:str(p.horarioMixto),permuta:str(p.permuta)}));
+      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja),horarioMixto:str(p.horarioMixto),permuta:str(p.permuta),diasAsistencia:str(p.diasAsistencia)}));
     }
     if(Array.isArray(data.incidencias)){
       DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion)}));

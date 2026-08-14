@@ -465,13 +465,14 @@ function esDiaFestivoOficialMX(fechaStr){
   return false;
 }
 // Días de descanso fijos por turno (patrón semanal habitual):
-// - Matutino / Vespertino: sábado y domingo
+// - Matutino / Vespertino: sábado, domingo Y días festivos oficiales
 // - Jornada Acumulada: lunes a viernes (trabaja fines de semana), EXCEPTO
 //   los días festivos oficiales, que no cuentan como su descanso semanal normal
 // - Nocturno / Supervisoras / Eventual: sin patrón fijo definido — se asume fin de semana por defecto
 function esDescansoTurno(turno,fechaStr){
   const day=new Date(fechaStr+'T12:00:00').getDay(); // 0=Dom...6=Sáb
   if(turno==='ja') return (day>=1&&day<=5)&&!esDiaFestivoOficialMX(fechaStr);
+  if(turno==='tmat'||turno==='vesp') return day===0||day===6||esDiaFestivoOficialMX(fechaStr);
   return day===0||day===6;
 }
 // Divide un rango de fechas calendario en días hábiles (se marcan como
@@ -486,6 +487,39 @@ function diasVacacionEnRango(turno,fIniStr,fFinStr){
     d.setDate(d.getDate()+1);
   }
   return{todos,habiles,descanso};
+}
+
+// ══════════════════════════════════════════════════════════
+// PERMUTA TEMPORAL — dos compañeros que intercambian turno por un
+// periodo (p.ej. un mes) y luego regresan a su turno normal. Se
+// guarda en p.permuta como texto "turno:AAAA-MM-DD a AAAA-MM-DD"
+// (varias permutas separadas por coma). Durante esas fechas, la
+// persona aparece COMPLETA en el turno de la permuta (todos los
+// días, no solo ciertos días de la semana) y NO en su turno normal
+// ni en su horario mixto — al terminar la fecha, vuelve solita a
+// como estaba. No mueve ni toca ninguna incidencia ya registrada:
+// solo cambia en qué tabla se muestra la persona ese periodo.
+// ══════════════════════════════════════════════════════════
+function parsePermutas(str){
+  if(!str||!String(str).trim())return null;
+  const out=[];
+  String(str).split(/[,;]/).forEach(tok=>{
+    const m=tok.trim().match(/^([a-z]+)\s*:\s*(\d{4}-\d{2}-\d{2})\s*a\s*(\d{4}-\d{2}-\d{2})$/i);
+    if(!m)return;
+    const turno=m[1].toLowerCase(),fIni=m[2],fFin=m[3];
+    if(TCAT.indexOf(turno)===-1||fFin<fIni)return;
+    out.push({turno,fIni,fFin});
+  });
+  return out.length?out:null;
+}
+function serializarPermutas(arr){
+  if(!arr)return'';
+  return arr.map(p=>p.turno+':'+p.fIni+' a '+p.fFin).join(', ');
+}
+function permutaActivaEnFecha(p,fechaStr){
+  const permutas=parsePermutas(p.permuta);
+  if(!permutas)return null;
+  return permutas.find(pm=>fechaStr>=pm.fIni&&fechaStr<=pm.fFin)||null;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -521,12 +555,16 @@ function serializarHorarioMixto(obj){
 }
 // ¿Esta persona puede llegar a aparecer en la tabla de este turno? (sin importar el día)
 function perteneceATurno(p,turno){
+  const permutas=parsePermutas(p.permuta);
+  if(permutas&&permutas.some(pm=>pm.turno===turno))return true;
   const hm=parseHorarioMixto(p.horarioMixto);
   if(hm)return!!hm[turno];
   return p.turno===turno;
 }
 // ¿Le corresponde a esta persona aparecer en ESTE turno, EN ESTA fecha?
 function esDiaAplicable(p,turno,fechaStr){
+  const perm=permutaActivaEnFecha(p,fechaStr);
+  if(perm)return perm.turno===turno; // permuta activa: ese día es TODO del turno de la permuta
   const hm=parseHorarioMixto(p.horarioMixto);
   if(!hm)return p.turno===turno; // comportamiento normal: todos los días bajo su único turno
   if(!hm[turno])return false;
@@ -655,14 +693,21 @@ function renderTurno(turno){
       const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===d.fecha)[0];
       const inc=io?io.incidencia:'';
       if(!esDiaAplicable(p,turno,d.fecha)){
-        celdas+='<td class="ic-na" title="'+p.nombre+' no tiene turno aquí este día (horario mixto)"></td>';
+        celdas+='<td class="ic-na" title="'+p.nombre+' no tiene turno aquí este día"></td>';
         return;
       }
       const dw=dow(d.fecha),fin=esDescansoTurno(turno,d.fecha);
       const cls=inc?clsInc(inc):(fin?'ic-DIA':'ic-vacio');
       celdas+='<td class="ic '+cls+'" data-emp="'+p.noEmp+'" data-fecha="'+d.fecha+'" data-turno="'+turno+'" onclick="clickCell(this)" title="'+d.fecha+'">'+(inc||'')+'</td>';
     });
-    const nomH=(esPas?'🎓 ':'')+p.nombre+(esPas&&p.finRotacion?'<br><small style="color:var(--txt3)">Hasta:'+p.finRotacion+'</small>':'');
+    let badgeCruzado='';
+    if(p.turno!==turno){
+      const permAqui=(parsePermutas(p.permuta)||[]).find(pm=>pm.turno===turno);
+      badgeCruzado = permAqui
+        ? ' <span class="ab" style="background:#F3E8FF;color:#7E22CE" title="Permuta temporal — su turno normal es '+(TLBL[p.turno]||p.turno)+'">🔄 hasta '+permAqui.fFin.slice(8,10)+'/'+permAqui.fFin.slice(5,7)+'</span>'
+        : ' <span class="ab" style="background:#EEF2FF;color:#4F46E5" title="Horario mixto — su turno normal es '+(TLBL[p.turno]||p.turno)+'">↔ mixto</span>';
+    }
+    const nomH=(esPas?'🎓 ':'')+p.nombre+badgeCruzado+(esPas&&p.finRotacion?'<br><small style="color:var(--txt3)">Hasta:'+p.finRotacion+'</small>':'');
     return '<tr class="'+rowC+'" style="'+bgR+'" data-remp="'+p.noEmp+'">'
       +'<td class="tl"><span class="emp">'+p.noEmp+'</span>'+bM+bPs+'</td>'
       +'<td class="tl"><span class="nom"'+(esPas?' style="color:var(--az2)"':'')+'>'+nomH+'</span></td>'
@@ -927,7 +972,9 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     +'<div class="fr" id="ffr" style="'+(esPas?'':'opacity:.4')+'"><label class="fl">Fin rotación</label><input id="ffin" class="fi" value="'+(p&&p.finRotacion?p.finRotacion:'')+'" placeholder="DD.MM.AA"></div></div>'
     +'<div id="nota-eventual" style="display:none;font-size:10px;color:#B45309;background:#FEF3C7;border-radius:6px;padding:6px 10px;margin-bottom:12px">ℹ️ El personal eventual no requiere No. Empleado oficial (se genera uno interno automático) y no se le calculan ni se le muestran días de vacaciones.</div>'
     +'<div class="fr"><label class="fl">Horario mixto (opcional)</label><input id="fhm" class="fi" value="'+serializarHorarioMixto(parseHorarioMixto(p?p.horarioMixto:''))+'" placeholder="sab:ja, dom:noct"></div>'
-    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Solo si esta persona se presenta en <b>más de un turno</b> según el día — formato <code>día:turno</code> separado por comas (días: dom, lun, mar, mie, jue, vie, sab). Si se llena, ella SOLO aparecerá en cada tabla los días indicados aquí (el turno de arriba sigue rigiendo antigüedad/vacaciones). Déjalo vacío si tiene un único turno normal.</div>';
+    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Solo si esta persona se presenta en <b>más de un turno</b> según el día — formato <code>día:turno</code> separado por comas (días: dom, lun, mar, mie, jue, vie, sab). Si se llena, ella SOLO aparecerá en cada tabla los días indicados aquí (el turno de arriba sigue rigiendo antigüedad/vacaciones). Déjalo vacío si tiene un único turno normal.</div>'
+    +'<div class="fr"><label class="fl">Permuta temporal (opcional)</label><input id="fperm" class="fi" value="'+serializarPermutas(parsePermutas(p?p.permuta:''))+'" placeholder="ja:2026-09-01 a 2026-09-30"></div>'
+    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Para un <b>cambio de turno temporal</b> con un compañero (p.ej. un mes completo) — formato <code>turno:AAAA-MM-DD a AAAA-MM-DD</code>. Mientras esté vigente, aparecerá TODOS los días en ese turno y no en el de arriba; al pasar la fecha, regresa sola a su turno normal. No mueve ni borra ninguna incidencia ya registrada, ni afecta antigüedad/vacaciones.</div>';
   const extra=[];
   if(p){
     if(esBaja) extra.push({lbl:'↩️ Reactivar',cls:'btn-ghost',fn:()=>reactivarPersonal(noEmpEdit)});
@@ -948,7 +995,11 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     const hmParsed=parseHorarioMixto(hmRaw);
     if(hmRaw&&!hmParsed){toast('⚠ Formato de horario mixto no reconocido — revisa el ejemplo (sab:ja, dom:noct)');return;}
     const horarioMixto=hmParsed?serializarHorarioMixto(hmParsed):'';
-    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):''),horarioMixto};
+    const permRaw=document.getElementById('fperm').value.trim();
+    const permParsed=parsePermutas(permRaw);
+    if(permRaw&&!permParsed){toast('⚠ Formato de permuta no reconocido — revisa el ejemplo (ja:2026-09-01 a 2026-09-30)');return;}
+    const permuta=permParsed?serializarPermutas(permParsed):'';
+    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):''),horarioMixto,permuta};
     if(noEmpEdit){
       const idx=DB.personal.findIndex(x=>x.noEmp===noEmpEdit);
       if(idx>=0){rec.id=DB.personal[idx].id;DB.personal[idx]=rec;}
@@ -1191,7 +1242,7 @@ function calcVencimientos(umbralDias){
       if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;
       const d=new Date(i.fecha+'T12:00:00');
       return d>=per.inicio&&d<per.fin;
-    }).length;
+    }).length*multiplicadorVacacion(p.turno);
     const saldo=per.dias-tomados;
     if(saldo<=0)return; // ya agotó su derecho, no hay riesgo de vencimiento
     const diasRestantes=Math.ceil((per.fin-hoy)/86400000);
@@ -1278,7 +1329,9 @@ function abrirModalVacacion(prefill){
       if(TURNOS.includes(PAG))renderPag(PAG);
       if(batch.length)syncIncsBatch(batch);
       const msgDescanso=rango.descanso.length?' (se excluyeron '+rango.descanso.length+' día'+(rango.descanso.length!==1?'s':'')+' de descanso)':'';
-      toast('✓ Vacaciones registradas: '+fechas.length+' día'+(fechas.length!==1?'s':'')+' — '+(p?p.nombre:noEmp)+msgDescanso);
+      const multReg=multiplicadorVacacion(p?p.turno:'');
+      const msgMult=multReg>1?' · '+fechas.length+' guardia'+(fechas.length!==1?'s':'')+' = '+(fechas.length*multReg)+' días de saldo':'';
+      toast('✓ Vacaciones registradas: '+fechas.length+' día'+(fechas.length!==1?'s':'')+' — '+(p?p.nombre:noEmp)+msgDescanso+msgMult);
     };
     if(conflictos.length){
       abrirModal('⚠️ Advertencia',
@@ -1438,6 +1491,14 @@ function diasVacXAntiguedad(anioServicio){
   const extra=Math.ceil((anioServicio-30)/5);
   return 30+extra*2;
 }
+// ══════════════════════════════════════════════════════════
+// MULTIPLICADOR DE DÍAS DE VACACIÓN POR TURNO — Nocturno (12 hrs)
+// y Jornada Acumulada (14 hrs) trabajan guardias más largas que un
+// turno estándar; 1 guardia tomada como vacación consume 2 días del
+// saldo (en vez de 1, como en Matutino/Vespertino/Supervisoras).
+// ══════════════════════════════════════════════════════════
+const MULT_VACACION_TURNO={noct:2,ja:2};
+function multiplicadorVacacion(turno){return MULT_VACACION_TURNO[turno]||1;}
 // Calcula el período de servicio vigente (aniversario a aniversario) y los días que corresponden
 function normalizarAnio(anioTxt){
   if(!anioTxt)return null;
@@ -1476,18 +1537,21 @@ function imprimirSolicitudVacacion(){
   if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+p.nombre+' — no hay nada que imprimir');return;}
 
   const per=periodoVacActual(p.fechaIngreso);
-  let diasCorr=0, tomadosPrevios=0;
+  const mult=multiplicadorVacacion(p.turno);
+  let diasCorr=0, tomadosPrevios=0, guardiasPrevias=0;
   if(per&&per.ingresoValido&&per.anioServicio>=1){
     diasCorr=per.dias;
-    tomadosPrevios=DB.incidencias.filter(i=>{
+    guardiasPrevias=DB.incidencias.filter(i=>{
       if(i.noEmp!==noEmp||i.incidencia!=='V')return false;
       if(fechas.includes(i.fecha))return false; // no contar el rango que se está solicitando ahora mismo
       const df=new Date(i.fecha+'T12:00:00');
       return df>=per.inicio&&df<per.fin;
     }).length;
+    tomadosPrevios=guardiasPrevias*mult;
   }
+  const diasSolicitud=fechas.length*mult;
   const restantesAntes = diasCorr ? (diasCorr - tomadosPrevios) : 0;
-  const restantesDespues = diasCorr ? (restantesAntes - fechas.length) : 0;
+  const restantesDespues = diasCorr ? (restantesAntes - diasSolicitud) : 0;
 
   const reanuda=new Date(fEnd); reanuda.setDate(reanuda.getDate()+1);
   let reanudaStr=fStr(reanuda.getFullYear(),reanuda.getMonth(),reanuda.getDate());
@@ -1513,7 +1577,7 @@ function imprimirSolicitudVacacion(){
   };
   const patronDesc=PATRON_DESCANSO[p.turno]||null;
   const notaDesc = p.turno==='ja' ? 'Lunes a viernes — excepto días festivos oficiales'
-    : (p.turno==='tmat'||p.turno==='vesp') ? 'Sábado y domingo'
+    : (p.turno==='tmat'||p.turno==='vesp') ? 'Sábado, domingo y días festivos oficiales'
     : 'Marcar a mano — no capturados en el sistema';
 
   const docHtml = (copiaLbl)=>(
@@ -1530,10 +1594,10 @@ function imprimirSolicitudVacacion(){
     +stat(antiguedadTxt.split(' ')[0],'Antigüedad')
     +stat(diasCorr||'—','Corresponden')
     +stat(tomadosPrevios,'Gozados antes')
-    +stat(fechas.length,'Esta solicitud')
+    +stat(diasSolicitud,mult>1?'Esta sol. ('+fechas.length+' g.×'+mult+')':'Esta solicitud')
     +stat(restantesDespues,'Saldo restante',restantesDespues<=0)
     +'</div>'
-    +'<div class="banner"><div class="rng">🏖 '+fmt(fIni)+' → '+fmt(fFin)+' · '+diasRestTxt+'</div><div class="sub">Reanuda labores el '+fmt(reanudaStr)+'</div></div>'
+    +'<div class="banner"><div class="rng">🏖 '+fmt(fIni)+' → '+fmt(fFin)+' · '+diasRestTxt+'</div><div class="sub">Reanuda labores el '+fmt(reanudaStr)+(mult>1?' · '+fechas.length+' guardia'+(fechas.length!==1?'s':'')+' = '+diasSolicitud+' días de saldo ('+TLBL[p.turno]+', ×'+mult+')':'')+'</div></div>'
     +'<div class="desc">Días de descanso fijos<div class="chips">'
     +['L','M','M','J','V','S','D'].map((d,idx)=>'<span class="chip-d'+(patronDesc&&patronDesc[idx]?' on':'')+'">'+d+'</span>').join('')
     +'</div><small>'+notaDesc+'</small></div>'
@@ -1629,11 +1693,14 @@ function renderSaldoVac(){
     }
     const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
     const finStr=fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate());
-    const tomados=DB.incidencias.filter(i=>{
+    const guardias=DB.incidencias.filter(i=>{
       if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;
       const d=new Date(i.fecha+'T12:00:00');
       return d>=per.inicio&&d<per.fin;
     }).length;
+    const mult=multiplicadorVacacion(p.turno);
+    const tomados=guardias*mult;
+    const tomadosTxt = mult>1 ? tomados+' <span style="color:var(--txt3);font-size:9px">('+guardias+' guardia'+(guardias!==1?'s':'')+' ×'+mult+')</span>' : String(tomados);
     const saldo=per.dias-tomados;
     const colorSaldo=saldo<=0?'var(--rojo)':(saldo<=per.dias*0.25?'var(--naranja)':'#15803D');
     const diasVence=Math.ceil((per.fin-hoy)/86400000);
@@ -1645,29 +1712,30 @@ function renderSaldoVac(){
       +'<td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td>'
       +'<td class="tl" style="font-size:10px;color:var(--txt2)">'+iniStr+' – '+finStr+' (año '+per.anioServicio+')</td>'
       +'<td style="text-align:center;font-weight:700">'+per.dias+'</td>'
-      +'<td style="text-align:center">'+tomados+'</td>'
+      +'<td style="text-align:center">'+tomadosTxt+'</td>'
       +'<td style="text-align:center;font-weight:700;color:'+colorSaldo+'">'+saldo+'</td>'
       +'<td style="text-align:center;font-size:10px">'+venceTxt+'</td></tr>';
   });
   body.innerHTML='<div class="card"><div class="wrap"><table class="tbl"><thead><tr>'
     +'<th class="tl">No.Emp</th><th class="tl">Nombre</th><th class="tl">Turno</th><th class="tl">Período vigente</th>'
     +'<th>Días que corresponden</th><th>Tomados</th><th>Saldo</th><th>Vence en</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>'
-    +'<div style="font-size:10px;color:var(--txt3);margin-top:8px">Cálculo según la tabla de la LFT (Reforma "Vacaciones Dignas"). El período se cuenta de aniversario a aniversario de ingreso, no por año calendario. "Vence en" solo se marca cuando aún queda saldo por disfrutar. Verifica manualmente los casos marcados sin fecha reconocida.</div>';
+    +'<div style="font-size:10px;color:var(--txt3);margin-top:8px">Cálculo según la tabla de la LFT (Reforma "Vacaciones Dignas"). El período se cuenta de aniversario a aniversario de ingreso, no por año calendario. Nocturno (12 hrs) y J. Acumulada (14 hrs): cada guardia tomada como vacación consume <b>2 días</b> del saldo. "Vence en" solo se marca cuando aún queda saldo por disfrutar. Verifica manualmente los casos marcados sin fecha reconocida.</div>';
 }
 function expCSVSaldoVac(){
   const ft=document.getElementById('sv-turno').value;
   const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.turno!=='eventual'&&p.activo!=='0'&&(!ft||p.turno===ft));
-  let csv='No.Emp,Nombre,Turno,Periodo,DiasCorresponden,DiasTomados,Saldo,DiasParaVencer\n';
+  let csv='No.Emp,Nombre,Turno,Periodo,DiasCorresponden,Guardias,DiasTomados,Saldo,DiasParaVencer\n';
   const hoy=new Date(); hoy.setHours(0,0,0,0);
   pers.forEach(p=>{
     const per=periodoVacActual(p.fechaIngreso);
-    if(!per||!per.ingresoValido||per.anioServicio<1){csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+',N/A,,,,\n';return;}
-    const tomados=DB.incidencias.filter(i=>{if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;const d=new Date(i.fecha+'T12:00:00');return d>=per.inicio&&d<per.fin;}).length;
+    if(!per||!per.ingresoValido||per.anioServicio<1){csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+',N/A,,,,,\n';return;}
+    const guardias=DB.incidencias.filter(i=>{if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;const d=new Date(i.fecha+'T12:00:00');return d>=per.inicio&&d<per.fin;}).length;
+    const tomados=guardias*multiplicadorVacacion(p.turno);
     const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
     const finStr=fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate());
     const saldo=per.dias-tomados;
     const diasVence=saldo<=0?'':Math.ceil((per.fin-hoy)/86400000);
-    csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+','+iniStr+'_a_'+finStr+','+per.dias+','+tomados+','+saldo+','+diasVence+'\n';
+    csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+','+iniStr+'_a_'+finStr+','+per.dias+','+guardias+','+tomados+','+saldo+','+diasVence+'\n';
   });
   dlCSV(csv,'SaldoVacaciones_'+new Date().toISOString().slice(0,10));
 }
@@ -1884,7 +1952,7 @@ async function cargarDatos(){
     const str = v=>(v!==null&&v!==undefined)?String(v):'';
     const fecha = v=>v?String(v).substring(0,10):'';
     if(Array.isArray(data.personal)&&data.personal.length>0){
-      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja),horarioMixto:str(p.horarioMixto)}));
+      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja),horarioMixto:str(p.horarioMixto),permuta:str(p.permuta)}));
     }
     if(Array.isArray(data.incidencias)){
       DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion)}));

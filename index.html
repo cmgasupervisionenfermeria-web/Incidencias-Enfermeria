@@ -258,6 +258,13 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <select id="vac-turno" class="fi" style="width:160px" onchange="renderVacaciones()"><option value="">Todos los turnos</option><option value="tmat">Matutino</option><option value="vesp">Vespertino</option><option value="noct">Nocturno</option><option value="sup">Supervisoras</option><option value="ja">J. Acumulada</option></select>
     <button class="btn btn-primary" onclick="rPin(()=>abrirModalVacacion())">+ Registrar vacación</button>
   </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:10px;color:var(--txt3)">
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#1D4ED8;vertical-align:middle;margin-right:3px"></span>Matutino</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#15803D;vertical-align:middle;margin-right:3px"></span>Vespertino</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#B91C1C;vertical-align:middle;margin-right:3px"></span>Nocturno</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#7E22CE;vertical-align:middle;margin-right:3px"></span>J. Acumulada</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#92400E;vertical-align:middle;margin-right:3px"></span>Supervisoras</span>
+  </div>
   <div id="vac-cal"><div class="empty">Cargando calendario...</div></div>
 </div>
 
@@ -348,6 +355,14 @@ const TURNOS     = ['tmat','vesp','noct','sup','ja'];
 const TCAT       = ['tmat','vesp','noct','sup','ja','eventual'];
 const TLBL       = {tmat:'Matutino',vesp:'Vespertino',noct:'Nocturno',sup:'Supervisoras',ja:'J. Acumulada',eventual:'Eventual'};
 const TICO       = {tmat:'🌅',vesp:'🌆',noct:'🌙',sup:'⭐',ja:'📅',eventual:'🔄'};
+// Colores por turno para el Calendario de Vacaciones (identificación visual rápida)
+const VAC_COLOR_TURNO = {
+  tmat:{bg:'#DBEAFE',fg:'#1D4ED8'}, // Matutino — azul
+  vesp:{bg:'#DCFCE7',fg:'#15803D'}, // Vespertino — verde
+  noct:{bg:'#FEE2E2',fg:'#B91C1C'}, // Nocturno — rojo
+  ja:{bg:'#F3E8FF',fg:'#7E22CE'},   // Jornada Acumulada — lila
+  sup:{bg:'#FEF3C7',fg:'#92400E'}   // Supervisoras — dorado
+};
 const MESES      = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const MESC       = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const DSEM       = ['D','L','M','M','J','V','S'];
@@ -424,13 +439,39 @@ function diasQ(mes,anio,q){
   return dias;
 }
 function dow(f){return DSEM[new Date(f+'T12:00:00').getDay()];}
+// ══════════════════════════════════════════════════════════
+// DÍAS FESTIVOS OFICIALES (México — LFT Art. 74)
+// ══════════════════════════════════════════════════════════
+function nEsimoLunesDelMes(anio,mesIdx,n){
+  let cuenta=0;
+  for(let dia=1;dia<=31;dia++){
+    const dt=new Date(anio,mesIdx,dia);
+    if(dt.getMonth()!==mesIdx)break;
+    if(dt.getDay()===1){cuenta++;if(cuenta===n)return dia;}
+  }
+  return null;
+}
+function esDiaFestivoOficialMX(fechaStr){
+  const d=new Date(fechaStr+'T12:00:00');
+  const y=d.getFullYear(),m=d.getMonth(),dia=d.getDate();
+  if(m===0&&dia===1)return true; // 1 ene — Año Nuevo
+  if(m===1&&dia===nEsimoLunesDelMes(y,1,1))return true; // 1er lunes de feb — Día de la Constitución
+  if(m===2&&dia===nEsimoLunesDelMes(y,2,3))return true; // 3er lunes de mar — Natalicio de Juárez
+  if(m===4&&dia===1)return true; // 1 mayo — Día del Trabajo
+  if(m===8&&dia===16)return true; // 16 sep — Independencia
+  if(m===10&&dia===nEsimoLunesDelMes(y,10,3))return true; // 3er lunes de nov — Revolución
+  if(m===11&&dia===1&&(y-2018)%6===0)return true; // 1 dic cada 6 años — Transmisión del Poder Ejecutivo
+  if(m===11&&dia===25)return true; // 25 dic — Navidad
+  return false;
+}
 // Días de descanso fijos por turno (patrón semanal habitual):
 // - Matutino / Vespertino: sábado y domingo
-// - Jornada Acumulada: lunes a viernes (trabaja fines de semana)
+// - Jornada Acumulada: lunes a viernes (trabaja fines de semana), EXCEPTO
+//   los días festivos oficiales, que no cuentan como su descanso semanal normal
 // - Nocturno / Supervisoras / Eventual: sin patrón fijo definido — se asume fin de semana por defecto
 function esDescansoTurno(turno,fechaStr){
   const day=new Date(fechaStr+'T12:00:00').getDay(); // 0=Dom...6=Sáb
-  if(turno==='ja') return day>=1&&day<=5;
+  if(turno==='ja') return (day>=1&&day<=5)&&!esDiaFestivoOficialMX(fechaStr);
   return day===0||day===6;
 }
 // Divide un rango de fechas calendario en días hábiles (se marcan como
@@ -1288,7 +1329,7 @@ function renderVacaciones(){
     const fechaCelda=fStr(anio,mes,dia);
     html+='<td style="'+(esHoy?'background:var(--az3);':'')+'cursor:pointer" onclick="rPin(()=>abrirModalVacacion({fecha:\''+fechaCelda+'\'}))" title="Clic para agregar vacación el '+fechaCelda+'">'
       +'<div style="font-size:10px;font-weight:700;color:'+(esHoy?'var(--az2)':'var(--txt3)')+';margin-bottom:3px">'+dia+'</div>'
-      +gente.map(g=>'<div style="font-size:9px;background:#DCFCE7;color:#15803D;border-radius:3px;padding:1px 4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="'+g.nombre+' — '+(TLBL[g.turno]||g.turno)+' · clic para quitar" onclick="event.stopPropagation();rPin(()=>elimVacacionDia(\''+g.noEmp+'\',\''+fechaCelda+'\',\''+g.nombre.replace(/'/g,"\\'")+'\'))">'+g.nombre.split(' ')[0]+'</div>').join('')
+      +gente.map(g=>{const c=VAC_COLOR_TURNO[g.turno]||VAC_COLOR_TURNO.vesp;return '<div style="font-size:9px;background:'+c.bg+';color:'+c.fg+';border-radius:3px;padding:1px 4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="'+g.nombre+' — '+(TLBL[g.turno]||g.turno)+' · clic para quitar" onclick="event.stopPropagation();rPin(()=>elimVacacionDia(\''+g.noEmp+'\',\''+fechaCelda+'\',\''+g.nombre.replace(/'/g,"\\'")+'\'))">'+g.nombre.split(' ')[0]+'</div>';}).join('')
       +'</td>';
     col++;
     if(col%7===0&&dia!==diasEnMes)html+='</tr><tr>';
@@ -1449,7 +1490,13 @@ function imprimirSolicitudVacacion(){
   const restantesDespues = diasCorr ? (restantesAntes - fechas.length) : 0;
 
   const reanuda=new Date(fEnd); reanuda.setDate(reanuda.getDate()+1);
-  const reanudaStr=fStr(reanuda.getFullYear(),reanuda.getMonth(),reanuda.getDate());
+  let reanudaStr=fStr(reanuda.getFullYear(),reanuda.getMonth(),reanuda.getDate());
+  let _guardReanuda=0;
+  while(esDescansoTurno(p.turno,reanudaStr)&&_guardReanuda<14){
+    reanuda.setDate(reanuda.getDate()+1);
+    reanudaStr=fStr(reanuda.getFullYear(),reanuda.getMonth(),reanuda.getDate());
+    _guardReanuda++;
+  }
   const hoy=new Date();
   const hoyStr=String(hoy.getDate()).padStart(2,'0')+'-'+MESC[hoy.getMonth()].toLowerCase()+'-'+String(hoy.getFullYear()).slice(-2);
   const fmt=f=>f?f.split('-').reverse().join(' '):'';

@@ -433,6 +433,19 @@ function esDescansoTurno(turno,fechaStr){
   if(turno==='ja') return day>=1&&day<=5;
   return day===0||day===6;
 }
+// Divide un rango de fechas calendario en días hábiles (se marcan como
+// vacación) y días de descanso (se excluyen — no cuentan como día tomado).
+function diasVacacionEnRango(turno,fIniStr,fFinStr){
+  const todos=[],habiles=[],descanso=[];
+  let d=new Date(fIniStr+'T12:00:00'); const fEnd=new Date(fFinStr+'T12:00:00');
+  while(d<=fEnd){
+    const f=fStr(d.getFullYear(),d.getMonth(),d.getDate());
+    todos.push(f);
+    (esDescansoTurno(turno,f)?descanso:habiles).push(f);
+    d.setDate(d.getDate()+1);
+  }
+  return{todos,habiles,descanso};
+}
 
 // ══════════════════════════════════════════════════════════
 // HORARIO MIXTO — personal que se presenta en más de un turno
@@ -1202,16 +1215,16 @@ function abrirModalVacacion(prefill){
   const html='<div class="fr"><label class="fl">Empleado *</label><select id="vc-e" class="fs"><option value="">— Selecciona —</option>'+pOpts+'</select></div>'
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha inicio *</label><input id="vc-fi" type="date" class="fi" value="'+fPre+'"></div>'
     +'<div class="fr"><label class="fl">Fecha fin *</label><input id="vc-ff" type="date" class="fi" value="'+fPre+'"></div></div>'
-    +'<div style="font-size:10px;color:var(--txt3);margin-top:2px">Se registrará la incidencia <b>V (Vacaciones)</b> en cada día del rango (incluye fines de semana). Para un solo día, deja la misma fecha en inicio y fin.</div>';
+    +'<div style="font-size:10px;color:var(--txt3);margin-top:2px">Se registrará la incidencia <b>V (Vacaciones)</b> solo en los días hábiles del rango — los días de descanso de su turno se excluyen automáticamente. Para un solo día, deja la misma fecha en inicio y fin.</div>';
   abrirModal('🏖 Registrar vacaciones',html,()=>{
     const noEmp=document.getElementById('vc-e').value;
     const fIni=document.getElementById('vc-fi').value, fFin=document.getElementById('vc-ff').value;
     if(!noEmp||!fIni||!fFin){toast('Completa todos los campos');return;}
     if(fFin<fIni){toast('La fecha fin debe ser igual o posterior a la de inicio');return;}
     const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
-    const fechas=[];
-    let d=new Date(fIni+'T12:00:00'); const fEnd=new Date(fFin+'T12:00:00');
-    while(d<=fEnd){fechas.push(fStr(d.getFullYear(),d.getMonth(),d.getDate()));d.setDate(d.getDate()+1);}
+    const rango=diasVacacionEnRango(p?p.turno:'',fIni,fFin);
+    const fechas=rango.habiles;
+    if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+(p?p.nombre:noEmp)+' — no se registró nada');return;}
     const conflictos=fechas.filter(f=>DB.incidencias.some(i=>i.noEmp===noEmp&&i.fecha===f&&i.incidencia&&i.incidencia!=='V'));
     const aplicar=()=>{
       const batch=[];
@@ -1223,7 +1236,8 @@ function abrirModalVacacion(prefill){
       guardarLocal();cerrarModal();renderVacaciones();
       if(TURNOS.includes(PAG))renderPag(PAG);
       if(batch.length)syncIncsBatch(batch);
-      toast('✓ Vacaciones registradas: '+fechas.length+' día'+(fechas.length!==1?'s':'')+' — '+(p?p.nombre:noEmp));
+      const msgDescanso=rango.descanso.length?' (se excluyeron '+rango.descanso.length+' día'+(rango.descanso.length!==1?'s':'')+' de descanso)':'';
+      toast('✓ Vacaciones registradas: '+fechas.length+' día'+(fechas.length!==1?'s':'')+' — '+(p?p.nombre:noEmp)+msgDescanso);
     };
     if(conflictos.length){
       abrirModal('⚠️ Advertencia',
@@ -1415,9 +1429,10 @@ function imprimirSolicitudVacacion(){
   const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
   if(!p){toast('Empleado no encontrado');return;}
 
-  const fechas=[];
-  let d=new Date(fIni+'T12:00:00'); const fEnd=new Date(fFin+'T12:00:00');
-  while(d<=fEnd){fechas.push(fStr(d.getFullYear(),d.getMonth(),d.getDate()));d.setDate(d.getDate()+1);}
+  const fEnd=new Date(fFin+'T12:00:00');
+  const rango=diasVacacionEnRango(p.turno,fIni,fFin);
+  const fechas=rango.habiles;
+  if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+p.nombre+' — no hay nada que imprimir');return;}
 
   const per=periodoVacActual(p.fechaIngreso);
   let diasCorr=0, tomadosPrevios=0;
@@ -1848,4 +1863,3 @@ document.addEventListener('DOMContentLoaded', cargarDatos);
 </script>
 </body>
 </html>
-

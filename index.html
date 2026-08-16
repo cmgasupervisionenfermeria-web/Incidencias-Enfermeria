@@ -271,6 +271,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <select id="vac-anio" class="fi" style="width:80px" onchange="renderVacaciones()"><option value="2025">2025</option><option value="2026">2026</option><option value="2027">2027</option></select>
     <select id="vac-turno" class="fi" style="width:160px" onchange="renderVacaciones()"><option value="">Todos los turnos</option><option value="tmat">Matutino</option><option value="vesp">Vespertino</option><option value="noct">Nocturno</option><option value="sup">Supervisoras</option><option value="ja">J. Acumulada</option></select>
     <button class="btn btn-primary" onclick="rPin(()=>abrirModalVacacion())">+ Registrar vacación</button>
+    <button class="btn btn-ghost" onclick="rPin(()=>abrirReimprimirSolicitud())">🖨 Reimprimir solicitud</button>
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:10px;color:var(--txt3)">
     <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#1D4ED8;vertical-align:middle;margin-right:3px"></span>Matutino</span>
@@ -1575,7 +1576,9 @@ function abrirModalVacacion(prefill){
   const html='<div class="fr"><label class="fl">Empleado *</label><select id="vc-e" class="fs"><option value="">— Selecciona —</option>'+pOpts+'</select></div>'
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha inicio *</label><input id="vc-fi" type="date" class="fi" value="'+fPre+'"></div>'
     +'<div class="fr"><label class="fl">Fecha fin *</label><input id="vc-ff" type="date" class="fi" value="'+fPre+'"></div></div>'
-    +'<div style="font-size:10px;color:var(--txt3);margin-top:2px">Se registrará la incidencia <b>V (Vacaciones)</b> solo en los días hábiles del rango — los días de descanso de su turno se excluyen automáticamente. Para un solo día, deja la misma fecha en inicio y fin.</div>';
+    +'<div style="font-size:10px;color:var(--txt3);margin-top:2px">Se registrará la incidencia <b>V (Vacaciones)</b> solo en los días hábiles del rango — los días de descanso de su turno se excluyen automáticamente. Para un solo día, deja la misma fecha en inicio y fin.</div>'
+    +'<div class="fr" style="margin-top:10px"><label class="fl">Adelanto de antigüedad (opcional)</label><input id="vc-forzar-anios" type="number" min="1" max="40" class="fi" placeholder="Ej. 2"></div>'
+    +'<div style="font-size:10px;color:var(--txt3);margin-top:-6px">Solo si está tomando días de un período que <b>todavía no cumple</b> (p.ej. adelanta días de su segundo año antes de su aniversario). Pon el número de años de antigüedad que quieres aplicar para el cálculo de días correspondientes — déjalo vacío para el cálculo automático normal.</div>';
   abrirModal('🏖 Registrar vacaciones',html,()=>{
     const noEmp=document.getElementById('vc-e').value;
     const fIni=document.getElementById('vc-fi').value, fFin=document.getElementById('vc-ff').value;
@@ -1611,6 +1614,22 @@ function abrirModalVacacion(prefill){
     aplicar();
   },'Guardar',[
     {lbl:'🖨 Imprimir solicitud',cls:'btn-ghost',fn:imprimirSolicitudVacacion}
+  ]);
+}
+// Reimprimir el formato de una vacación que YA se registró antes (por si no
+// se pudo imprimir en el momento) — no vuelve a registrar ni modifica nada,
+// solo genera el documento con el rango de fechas que se indique.
+function abrirReimprimirSolicitud(){
+  const pOpts=DB.personal.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre))
+    .map(p=>'<option value="'+p.noEmp+'">'+p.nombre+' ('+(TLBL[p.turno]||p.turno)+')'+(p.activo==='0'?' — de baja':'')+'</option>').join('');
+  const html='<div class="fr"><label class="fl">Empleado *</label><select id="vc-e" class="fs"><option value="">— Selecciona —</option>'+pOpts+'</select></div>'
+    +'<div class="fr2"><div class="fr"><label class="fl">Fecha inicio *</label><input id="vc-fi" type="date" class="fi"></div>'
+    +'<div class="fr"><label class="fl">Fecha fin *</label><input id="vc-ff" type="date" class="fi"></div></div>'
+    +'<div style="font-size:10px;color:var(--txt3);margin-top:2px">Usa el mismo rango de fechas que ya se registró como vacación (revísalo en el calendario de arriba si no lo recuerdas). Esto <b>no vuelve a registrar nada</b> — solo genera el documento para imprimir.</div>'
+    +'<div class="fr" style="margin-top:10px"><label class="fl">Adelanto de antigüedad (opcional)</label><input id="vc-forzar-anios" type="number" min="1" max="40" class="fi" placeholder="Ej. 2"></div>'
+    +'<div style="font-size:10px;color:var(--txt3);margin-top:-6px">Solo si esos días fueron un adelanto de un período que aún no cumplía al momento de tomarlos — pon los años de antigüedad a aplicar. Déjalo vacío para el cálculo automático normal.</div>';
+  abrirModal('🖨 Reimprimir solicitud de vacaciones',html,null,'',[
+    {lbl:'🖨 Imprimir',cls:'btn-primary',fn:imprimirSolicitudVacacion}
   ]);
 }
 function elimVacacionDia(noEmp,fecha,nombre){
@@ -1817,7 +1836,17 @@ function imprimirSolicitudVacacion(){
   const fechas=rango.habiles;
   if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+p.nombre+' — no hay nada que imprimir');return;}
 
-  const per=periodoVacActual(p.fechaIngreso);
+  let per=periodoVacActual(p.fechaIngreso);
+  const forzarEl=document.getElementById('vc-forzar-anios');
+  const forzarAnios=forzarEl?parseInt(forzarEl.value,10):NaN;
+  let esAdelanto=false;
+  if(forzarAnios>=1){
+    esAdelanto=true;
+    const finMin=new Date(fEnd); finMin.setDate(finMin.getDate()+1);
+    const inicioBase=(per&&per.inicio)?per.inicio:new Date(fIni+'T12:00:00');
+    const finBase=(per&&per.fin&&per.fin>finMin)?per.fin:finMin;
+    per={anioServicio:forzarAnios,dias:diasVacXAntiguedad(forzarAnios),inicio:inicioBase,fin:finBase,ingresoValido:true};
+  }
   const mult=multiplicadorVacacion(p);
   let diasCorr=0, tomadosPrevios=0, guardiasPrevias=0;
   if(per&&per.ingresoValido&&per.anioServicio>=1){
@@ -1878,7 +1907,7 @@ function imprimirSolicitudVacacion(){
     +stat(diasSolicitud,mult>1?'Esta sol. ('+fechas.length+' g.×'+mult+')':'Esta solicitud')
     +stat(restantesDespues,'Saldo restante',restantesDespues<=0)
     +'</div>'
-    +'<div class="banner"><div class="rng">🏖 '+fmt(fIni)+' → '+fmt(fFin)+' · '+diasRestTxt+'</div><div class="sub">Reanuda labores el '+fmt(reanudaStr)+(mult>1?' · '+fechas.length+' guardia'+(fechas.length!==1?'s':'')+' = '+diasSolicitud+' días de saldo ('+TLBL[p.turno]+', ×'+mult+')':'')+'</div></div>'
+    +'<div class="banner"><div class="rng">🏖 '+fmt(fIni)+' → '+fmt(fFin)+' · '+diasRestTxt+'</div><div class="sub">Reanuda labores el '+fmt(reanudaStr)+(mult>1?' · '+fechas.length+' guardia'+(fechas.length!==1?'s':'')+' = '+diasSolicitud+' días de saldo ('+TLBL[p.turno]+', ×'+mult+')':'')+(esAdelanto?' · ⚠ Adelanto de antigüedad ('+per.anioServicio+' años aplicados manualmente)':'')+'</div></div>'
     +'<div class="desc">Días de descanso fijos<div class="chips">'
     +['L','M','M','J','V','S','D'].map((d,idx)=>'<span class="chip-d'+(patronDesc&&patronDesc[idx]?' on':'')+'">'+d+'</span>').join('')
     +'</div><small>'+notaDesc+'</small></div>'

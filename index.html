@@ -1475,11 +1475,7 @@ function calcVencimientos(umbralDias){
   DB.personal.filter(p=>p.tipo!=='pasante'&&p.turno!=='eventual'&&p.activo!=='0').forEach(p=>{
     const per=periodoVacActual(p.fechaIngreso);
     if(!per||!per.ingresoValido||per.anioServicio<1||!per.fin)return;
-    const tomados=DB.incidencias.filter(i=>{
-      if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;
-      const d=new Date(i.fecha+'T12:00:00');
-      return d>=per.inicio&&d<per.fin;
-    }).length*multiplicadorVacacion(p);
+    const tomados=diasVacacionTomadosEnPeriodo(p.noEmp,per)*multiplicadorVacacion(p);
     const saldo=per.dias-tomados;
     if(saldo<=0)return; // ya agotó su derecho, no hay riesgo de vencimiento
     const diasRestantes=Math.ceil((per.fin-hoy)/86400000);
@@ -1590,12 +1586,15 @@ function abrirModalVacacion(prefill){
     const fechas=rango.habiles;
     if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+p.nombre+' — no se registró nada');return;}
     const conflictos=fechas.filter(f=>DB.incidencias.some(i=>i.noEmp===noEmp&&i.fecha===f&&i.incidencia&&i.incidencia!=='V'));
+    const forzarEl=document.getElementById('vc-forzar-anios');
+    const forzarAniosReg=forzarEl?parseInt(forzarEl.value,10):NaN;
+    const periodoVacTag=(forzarAniosReg>=1)?String(forzarAniosReg):'';
     const aplicar=()=>{
       const batch=[];
       fechas.forEach(f=>{
         DB.incidencias=DB.incidencias.filter(i=>!(i.noEmp===noEmp&&i.fecha===f));
-        DB.incidencias.push({id:String(NID++),noEmp,fecha:f,incidencia:'V',observacion:''});
-        batch.push({noEmp,fecha:f,incidencia:'V',observacion:''});
+        DB.incidencias.push({id:String(NID++),noEmp,fecha:f,incidencia:'V',observacion:'',periodoVac:periodoVacTag});
+        batch.push({noEmp,fecha:f,incidencia:'V',observacion:'',periodoVac:periodoVacTag});
       });
       guardarLocal();cerrarModal();renderVacaciones();
       if(TURNOS.includes(PAG))renderPag(PAG);
@@ -1603,7 +1602,8 @@ function abrirModalVacacion(prefill){
       const msgDescanso=rango.descanso.length?' (se excluyeron '+rango.descanso.length+' día'+(rango.descanso.length!==1?'s':'')+' de descanso)':'';
       const multReg=multiplicadorVacacion(p);
       const msgMult=multReg>1?' · '+fechas.length+' guardia'+(fechas.length!==1?'s':'')+' = '+(fechas.length*multReg)+' días de saldo':'';
-      toast('✓ Vacaciones registradas: '+fechas.length+' día'+(fechas.length!==1?'s':'')+' — '+(p?p.nombre:noEmp)+msgDescanso+msgMult);
+      const msgAdelanto=periodoVacTag?' · ⚠ etiquetado como adelanto del año '+periodoVacTag+' — se descontará de ese año aunque aún no cumpla el aniversario':'';
+      toast('✓ Vacaciones registradas: '+fechas.length+' día'+(fechas.length!==1?'s':'')+' — '+(p?p.nombre:noEmp)+msgDescanso+msgMult+msgAdelanto);
     };
     if(conflictos.length){
       abrirModal('⚠️ Advertencia',
@@ -1807,6 +1807,21 @@ function normalizarAnio(anioTxt){
   const pivote=(new Date().getFullYear()%100)+1; // años futuros cercanos -> siglo XXI; lejanos -> siglo XX
   return yy<=pivote?2000+yy:1900+yy;
 }
+// Cuenta cuántas "guardias" de V ya se tomaron contra un período específico.
+// Un día V normal cuenta por su fecha (dentro de per.inicio–per.fin). Un día
+// V etiquetado como adelanto (i.periodoVac) cuenta contra el año que se le
+// asignó al registrarlo, SIN IMPORTAR su fecha calendario — así el saldo
+// queda correcto tanto antes como después de que pase el aniversario.
+function diasVacacionTomadosEnPeriodo(noEmp,per,excluirFechas){
+  excluirFechas=excluirFechas||[];
+  return DB.incidencias.filter(i=>{
+    if(i.noEmp!==noEmp||i.incidencia!=='V')return false;
+    if(excluirFechas.indexOf(i.fecha)!==-1)return false;
+    if(i.periodoVac)return String(i.periodoVac)===String(per.anioServicio);
+    const d=new Date(i.fecha+'T12:00:00');
+    return d>=per.inicio&&d<per.fin;
+  }).length;
+}
 function periodoVacActual(fechaIngresoStr){
   const f=parseFechaIngreso(fechaIngresoStr);
   if(!f||!f.anioTxt)return null;
@@ -1838,7 +1853,12 @@ function imprimirSolicitudVacacion(){
 
   let per=periodoVacActual(p.fechaIngreso);
   const forzarEl=document.getElementById('vc-forzar-anios');
-  const forzarAnios=forzarEl?parseInt(forzarEl.value,10):NaN;
+  let forzarAnios=forzarEl?parseInt(forzarEl.value,10):NaN;
+  if(!(forzarAnios>=1)){
+    // si el rango ya tiene un adelanto guardado de una vez anterior, lo detecta solo
+    const yaEtiquetado=DB.incidencias.find(i=>i.noEmp===noEmp&&i.incidencia==='V'&&fechas.includes(i.fecha)&&i.periodoVac);
+    if(yaEtiquetado)forzarAnios=parseInt(yaEtiquetado.periodoVac,10);
+  }
   let esAdelanto=false;
   if(forzarAnios>=1){
     esAdelanto=true;
@@ -1851,12 +1871,7 @@ function imprimirSolicitudVacacion(){
   let diasCorr=0, tomadosPrevios=0, guardiasPrevias=0;
   if(per&&per.ingresoValido&&per.anioServicio>=1){
     diasCorr=per.dias;
-    guardiasPrevias=DB.incidencias.filter(i=>{
-      if(i.noEmp!==noEmp||i.incidencia!=='V')return false;
-      if(fechas.includes(i.fecha))return false; // no contar el rango que se está solicitando ahora mismo
-      const df=new Date(i.fecha+'T12:00:00');
-      return df>=per.inicio&&df<per.fin;
-    }).length;
+    guardiasPrevias=diasVacacionTomadosEnPeriodo(noEmp,per,fechas);
     tomadosPrevios=guardiasPrevias*mult;
   }
   const diasSolicitud=fechas.length*mult;
@@ -2003,11 +2018,7 @@ function renderSaldoVac(){
     }
     const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
     const finStr=fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate());
-    const guardias=DB.incidencias.filter(i=>{
-      if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;
-      const d=new Date(i.fecha+'T12:00:00');
-      return d>=per.inicio&&d<per.fin;
-    }).length;
+    const guardias=diasVacacionTomadosEnPeriodo(p.noEmp,per);
     const mult=multiplicadorVacacion(p);
     const tomados=guardias*mult;
     const tomadosTxt = mult>1 ? tomados+' <span style="color:var(--txt3);font-size:9px">('+guardias+' guardia'+(guardias!==1?'s':'')+' ×'+mult+')</span>' : String(tomados);
@@ -2039,7 +2050,7 @@ function expCSVSaldoVac(){
   pers.forEach(p=>{
     const per=periodoVacActual(p.fechaIngreso);
     if(!per||!per.ingresoValido||per.anioServicio<1){csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+',N/A,,,,,\n';return;}
-    const guardias=DB.incidencias.filter(i=>{if(i.noEmp!==p.noEmp||i.incidencia!=='V')return false;const d=new Date(i.fecha+'T12:00:00');return d>=per.inicio&&d<per.fin;}).length;
+    const guardias=diasVacacionTomadosEnPeriodo(p.noEmp,per);
     const tomados=guardias*multiplicadorVacacion(p);
     const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
     const finStr=fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate());
@@ -2266,7 +2277,7 @@ async function cargarDatos(){
       DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja),horarioMixto:str(p.horarioMixto),permuta:str(p.permuta),diasAsistencia:str(p.diasAsistencia),multVacacion:str(p.multVacacion)}));
     }
     if(Array.isArray(data.incidencias)){
-      DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion)}));
+      DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion),periodoVac:str(i.periodoVac)}));
     }
     if(Array.isArray(data.eventual)){
       DB.eventual=data.eventual.map(e=>({id:str(e.id),nombre:str(e.nombre),noEmp:str(e.noEmp),fecha:fecha(e.fecha),area:str(e.area),incidenciaCubierta:str(e.incidenciaCubierta),observacion:str(e.observacion)}));

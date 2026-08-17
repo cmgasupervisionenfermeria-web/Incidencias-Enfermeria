@@ -259,8 +259,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <button class="btn btn-ghost" onclick="expCSVEventual()">↓ CSV</button>
   </div>
   <div class="card"><div class="card-header"><span class="card-title">🔄 Personal Eventual</span><span id="cnt-ev" class="card-count"></span></div>
-  <div class="wrap"><table class="tbl"><thead><tr><th class="tl">Trabajador</th><th class="tl">Fecha</th><th class="tl">Área</th><th class="tl">Incidencia cubierta</th><th class="tl">Observaciones</th><th></th></tr></thead>
-  <tbody id="tbody-ev"><tr><td colspan="6" class="empty">Sin registros en este período</td></tr></tbody></table></div></div>
+  <div class="wrap"><table class="tbl"><thead><tr><th class="tl">Trabajador</th><th class="tl">Fecha</th><th class="tl">Área</th><th class="tl">Incidencia cubierta</th><th class="tl">Observaciones</th><th class="tl">Capturado por</th><th></th></tr></thead>
+  <tbody id="tbody-ev"><tr><td colspan="7" class="empty">Sin registros en este período</td></tr></tbody></table></div></div>
 </div>
 
 <!-- VACACIONES -->
@@ -355,8 +355,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <select id="tx-turno" class="fi" style="width:150px" onchange="renderTextra()"><option value="">Todos los turnos</option><option value="tmat">Matutino</option><option value="vesp">Vespertino</option><option value="noct">Nocturno</option><option value="sup">Supervisoras</option><option value="ja">J. Acumulada</option></select>
   </div>
   <div class="card"><div class="card-header"><span class="card-title">⏱ Tiempo Extra</span><span id="cnt-tx" class="card-count"></span><span id="tot-tx" style="font-size:11px;font-weight:700;color:var(--az);margin-left:6px"></span></div>
-  <div class="wrap"><table class="tbl"><thead><tr><th class="tl">No.Emp</th><th class="tl">Nombre</th><th class="tl">Turno cubierto</th><th class="tl">Fecha</th><th>Horas</th><th class="tl">Motivo</th><th></th></tr></thead>
-  <tbody id="tbody-tx"><tr><td colspan="7" class="empty">Sin registros</td></tr></tbody></table></div></div>
+  <div class="wrap"><table class="tbl"><thead><tr><th class="tl">No.Emp</th><th class="tl">Nombre</th><th class="tl">Turno cubierto</th><th class="tl">Fecha</th><th>Horas</th><th class="tl">Motivo</th><th class="tl">Capturado por</th><th></th></tr></thead>
+  <tbody id="tbody-tx"><tr><td colspan="8" class="empty">Sin registros</td></tr></tbody></table></div></div>
 </div>
 
 <div id="mbar" class="mbar"><span class="mlbl" id="mcount">0 celdas</span></div>
@@ -1243,7 +1243,7 @@ function abrirModalEventual(ev){
     let nombre,noEmp;
     if(selVal.indexOf('legacy:')===0){nombre=selVal.slice(7);noEmp='';}
     else{const per=DB.personal.filter(x=>x.noEmp===selVal)[0];if(!per){toast('Eventual no encontrado');return;}nombre=per.nombre;noEmp=per.noEmp;}
-    const rec={nombre,noEmp,fecha,area:document.getElementById('ev-a').value.trim(),incidenciaCubierta:document.getElementById('ev-ic').value.trim(),observacion:document.getElementById('ev-o').value.trim()};
+    const rec={nombre,noEmp,fecha,area:document.getElementById('ev-a').value.trim(),incidenciaCubierta:document.getElementById('ev-ic').value.trim(),observacion:document.getElementById('ev-o').value.trim(),capturadoPor:USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:(ev?ev.capturadoPor||'':'')};
     if(ev){rec.id=ev.id;const idx=DB.eventual.findIndex(e=>e.id===ev.id);if(idx>=0)DB.eventual[idx]=rec;}
     else{rec.id=String(NID++);DB.eventual.push(rec);}
     guardarLocal();cerrarModal();toast('✓ Eventual guardado');renderEventual();syncEventual(rec);
@@ -1259,7 +1259,7 @@ function renderEventual(){
   const lista=DB.eventual.filter(e=>fechas.includes(e.fecha));
   document.getElementById('cnt-ev').textContent=lista.length+' registros';
   const tb=document.getElementById('tbody-ev');
-  if(!lista.length){tb.innerHTML='<tr><td colspan="6" class="empty">Sin eventuales en este período</td></tr>';return;}
+  if(!lista.length){tb.innerHTML='<tr><td colspan="7" class="empty">Sin eventuales en este período</td></tr>';return;}
   // Agrupar por nombre (normalizado) y ordenar alfabéticamente
   const grupos={};
   lista.forEach(e=>{
@@ -1272,9 +1272,10 @@ function renderEventual(){
   claves.forEach(key=>{
     const g=grupos[key];
     g.items.sort((a,b)=>a.fecha.localeCompare(b.fecha));
-    html+='<tr class="grp-hdr"><td colspan="6">👤 '+g.nombre+(g.noEmp?' <span class="emp" style="color:inherit;opacity:.7">· No. '+g.noEmp+'</span>':'')+' <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">— '+g.items.length+' registro'+(g.items.length!==1?'s':'')+' en este período</span></td></tr>';
+    html+='<tr class="grp-hdr"><td colspan="7">👤 '+g.nombre+(g.noEmp?' <span class="emp" style="color:inherit;opacity:.7">· No. '+g.noEmp+'</span>':'')+' <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">— '+g.items.length+' registro'+(g.items.length!==1?'s':'')+' en este período</span></td></tr>';
     g.items.forEach(e=>{
       html+='<tr><td class="tl" style="padding-left:22px;color:var(--txt3)">↳</td><td class="tl">'+e.fecha+'</td><td class="tl">'+e.area+'</td><td class="tl">'+e.incidenciaCubierta+'</td><td class="tl" style="color:var(--txt3)">'+e.observacion+'</td>'
+        +'<td class="tl" style="font-size:10px;color:var(--txt3)">'+(e.capturadoPor||'—')+'</td>'
         +'<td><button class="btn btn-ghost" style="font-size:10px;padding:3px 7px" onclick="rPin(()=>abrirModalEventual(DB.eventual.filter(x=>x.id===\''+e.id+'\')[0]))">✏</button></td></tr>';
     });
   });
@@ -2155,7 +2156,7 @@ function abrirModalTextra(tx){
     const turnoCubierto=document.getElementById('tx-tc').value;
     if(!noEmp||!fecha||!horas||!motivo||!turnoCubierto){toast('Completa todos los campos');return;}
     const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
-    const rec={noEmp,nombre:p?p.nombre:'',turno:p?p.turno:'',turnoCubierto,fecha,horas,motivo};
+    const rec={noEmp,nombre:p?p.nombre:'',turno:p?p.turno:'',turnoCubierto,fecha,horas,motivo,capturadoPor:USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:(tx?tx.capturadoPor||'':'')};
     if(tx){rec.id=tx.id;const idx=DB.textra.findIndex(t=>t.id===tx.id);if(idx>=0)DB.textra[idx]=rec;}
     else{rec.id=String(NID++);DB.textra.push(rec);}
     guardarLocal();cerrarModal();toast('✓ Tiempo extra guardado');renderTextra();syncTextra(rec);
@@ -2175,11 +2176,12 @@ function renderTextra(){
   document.getElementById('cnt-tx').textContent=lista.length+' registros';
   document.getElementById('tot-tx').textContent=tot>0?'⏱ '+tot+' hrs total':'';
   const tb=document.getElementById('tbody-tx');
-  if(!lista.length){tb.innerHTML='<tr><td colspan="7" class="empty">Sin registros en este período</td></tr>';return;}
+  if(!lista.length){tb.innerHTML='<tr><td colspan="8" class="empty">Sin registros en este período</td></tr>';return;}
   tb.innerHTML=lista.map(t=>'<tr><td class="tl"><span class="emp">'+t.noEmp+'</span></td><td class="tl" style="font-weight:600">'+t.nombre+'</td>'
     +'<td class="tl"><span class="tbadge" title="Empleado: '+(TLBL[t.turno]||t.turno)+'">'+(TLBL[t.turnoCubierto]||t.turnoCubierto||TLBL[t.turno]||t.turno)+'</span></td>'
     +'<td class="tl">'+t.fecha+'</td><td style="text-align:center;font-weight:700;color:var(--az)">'+t.horas+' h</td>'
     +'<td class="tl" style="color:var(--txt2)">'+t.motivo+'</td>'
+    +'<td class="tl" style="font-size:10px;color:var(--txt3)">'+(t.capturadoPor||'—')+'</td>'
     +'<td><button class="btn btn-ghost" style="font-size:10px;padding:3px 7px" onclick="rPin(()=>abrirModalTextra(DB.textra.filter(x=>x.id===\''+t.id+'\')[0]))">✏</button></td></tr>').join('');
 }
 
@@ -2361,10 +2363,10 @@ async function cargarDatos(){
       DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion),periodoVac:str(i.periodoVac),capturadoPor:str(i.capturadoPor)}));
     }
     if(Array.isArray(data.eventual)){
-      DB.eventual=data.eventual.map(e=>({id:str(e.id),nombre:str(e.nombre),noEmp:str(e.noEmp),fecha:fecha(e.fecha),area:str(e.area),incidenciaCubierta:str(e.incidenciaCubierta),observacion:str(e.observacion)}));
+      DB.eventual=data.eventual.map(e=>({id:str(e.id),nombre:str(e.nombre),noEmp:str(e.noEmp),fecha:fecha(e.fecha),area:str(e.area),incidenciaCubierta:str(e.incidenciaCubierta),observacion:str(e.observacion),capturadoPor:str(e.capturadoPor)}));
     }
     if(Array.isArray(data.textra)){
-      DB.textra=data.textra.map(t=>({id:str(t.id),noEmp:str(t.noEmp),nombre:str(t.nombre),turno:str(t.turno),turnoCubierto:str(t.turnoCubierto),fecha:fecha(t.fecha),horas:parseFloat(t.horas)||0,motivo:str(t.motivo)}));
+      DB.textra=data.textra.map(t=>({id:str(t.id),noEmp:str(t.noEmp),nombre:str(t.nombre),turno:str(t.turno),turnoCubierto:str(t.turnoCubierto),fecha:fecha(t.fecha),horas:parseFloat(t.horas)||0,motivo:str(t.motivo),capturadoPor:str(t.capturadoPor)}));
     }
     if(Array.isArray(data.notas)){
       DB.notas=data.notas.map(n=>({id:str(n.id),noEmp:str(n.noEmp),nota:str(n.nota)}));

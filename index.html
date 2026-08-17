@@ -198,7 +198,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <div class="period-nav"><button onclick="camPeriodo(-1)">‹</button><span id="lbl-tmat" class="period-label">...</span><button onclick="camPeriodo(1)">›</button></div>
     <button class="period-btn active" id="q1-tmat" onclick="setQ(1)">Q1 · 11–25</button>
     <button class="period-btn" id="q2-tmat" onclick="setQ(2)">Q2 · 26–10</button>
-    <button class="btn btn-primary" onclick="rPin(()=>abrirModalPersonal(null,'tmat'))">+ Agregar</button>
+    <button class="btn btn-primary" onclick="rPinJohana(()=>abrirModalPersonal(null,'tmat'))">+ Agregar</button>
     <button class="btn btn-ghost" onclick="expCSV('tmat')">↓ CSV</button>
     <button class="btn btn-ghost" onclick="activarMulti();toast('✓ Modo selección — clic en celdas o días')" style="font-size:10px">☑ Seleccionar</button>
     <button class="btn btn-ghost" onclick="copiarDia()" style="font-size:10px">📋 Copiar día</button>
@@ -209,7 +209,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <div class="period-bar">
     <div class="period-nav"><button onclick="camPeriodo(-1)">‹</button><span id="lbl-vesp" class="period-label">...</span><button onclick="camPeriodo(1)">›</button></div>
     <button class="period-btn active" id="q1-vesp" onclick="setQ(1)">Q1 · 11–25</button><button class="period-btn" id="q2-vesp" onclick="setQ(2)">Q2 · 26–10</button>
-    <button class="btn btn-primary" onclick="rPin(()=>abrirModalPersonal(null,'vesp'))">+ Agregar</button>
+    <button class="btn btn-primary" onclick="rPinJohana(()=>abrirModalPersonal(null,'vesp'))">+ Agregar</button>
     <button class="btn btn-ghost" onclick="expCSV('vesp')">↓ CSV</button>
     <button class="btn btn-ghost" onclick="activarMulti();toast('✓ Modo selección')" style="font-size:10px">☑ Seleccionar</button>
     <button class="btn btn-ghost" onclick="copiarDia()" style="font-size:10px">📋 Copiar día</button>
@@ -220,7 +220,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <div class="period-bar">
     <div class="period-nav"><button onclick="camPeriodo(-1)">‹</button><span id="lbl-noct" class="period-label">...</span><button onclick="camPeriodo(1)">›</button></div>
     <button class="period-btn active" id="q1-noct" onclick="setQ(1)">Q1 · 11–25</button><button class="period-btn" id="q2-noct" onclick="setQ(2)">Q2 · 26–10</button>
-    <button class="btn btn-primary" onclick="rPin(()=>abrirModalPersonal(null,'noct'))">+ Agregar</button>
+    <button class="btn btn-primary" onclick="rPinJohana(()=>abrirModalPersonal(null,'noct'))">+ Agregar</button>
     <button class="btn btn-ghost" onclick="expCSV('noct')">↓ CSV</button>
     <button class="btn btn-ghost" onclick="activarMulti();toast('✓ Modo selección')" style="font-size:10px">☑ Seleccionar</button>
     <button class="btn btn-ghost" onclick="copiarDia()" style="font-size:10px">📋 Copiar día</button>
@@ -231,7 +231,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <div class="period-bar">
     <div class="period-nav"><button onclick="camPeriodo(-1)">‹</button><span id="lbl-sup" class="period-label">...</span><button onclick="camPeriodo(1)">›</button></div>
     <button class="period-btn active" id="q1-sup" onclick="setQ(1)">Q1 · 11–25</button><button class="period-btn" id="q2-sup" onclick="setQ(2)">Q2 · 26–10</button>
-    <button class="btn btn-primary" onclick="rPin(()=>abrirModalPersonal(null,'sup'))">+ Agregar</button>
+    <button class="btn btn-primary" onclick="rPinJohana(()=>abrirModalPersonal(null,'sup'))">+ Agregar</button>
     <button class="btn btn-ghost" onclick="expCSV('sup')">↓ CSV</button>
     <button class="btn btn-ghost" onclick="activarMulti();toast('✓ Modo selección')" style="font-size:10px">☑ Seleccionar</button>
     <button class="btn btn-ghost" onclick="copiarDia()" style="font-size:10px">📋 Copiar día</button>
@@ -242,7 +242,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <div class="period-bar">
     <div class="period-nav"><button onclick="camPeriodo(-1)">‹</button><span id="lbl-ja" class="period-label">...</span><button onclick="camPeriodo(1)">›</button></div>
     <button class="period-btn active" id="q1-ja" onclick="setQ(1)">Q1 · 11–25</button><button class="period-btn" id="q2-ja" onclick="setQ(2)">Q2 · 26–10</button>
-    <button class="btn btn-primary" onclick="rPin(()=>abrirModalPersonal(null,'ja'))">+ Agregar</button>
+    <button class="btn btn-primary" onclick="rPinJohana(()=>abrirModalPersonal(null,'ja'))">+ Agregar</button>
     <button class="btn btn-ghost" onclick="expCSV('ja')">↓ CSV</button>
     <button class="btn btn-ghost" onclick="activarMulti();toast('✓ Modo selección')" style="font-size:10px">☑ Seleccionar</button>
     <button class="btn btn-ghost" onclick="copiarDia()" style="font-size:10px">📋 Copiar día</button>
@@ -320,8 +320,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:10px">
     <div><div class="sec-t">👥 Catálogo de Personal</div><div class="sec-s">Gestión del personal por turno</div></div>
     <div style="display:flex;gap:6px">
-      <button class="btn btn-ghost" onclick="rPin(()=>abrirImportarAsistencia())">📋 Importar días de asistencia</button>
-      <button class="btn btn-primary" onclick="rPin(()=>abrirModalPersonal(null,null))">+ Nuevo empleado</button>
+      <button class="btn btn-ghost" onclick="rPinJohana(()=>abrirImportarAsistencia())">📋 Importar días de asistencia</button>
+      <button class="btn btn-primary" onclick="rPinJohana(()=>abrirModalPersonal(null,null))">+ Nuevo empleado</button>
     </div>
   </div>
   <div class="chips">
@@ -377,6 +377,11 @@ const USUARIOS_AUTORIZADOS = [
   {nombre:'NORMA PATRICIA SANCHEZ RODRIGUEZ', pin:'2602'}
 ];
 let USUARIO_ACTUAL = null; // {nombre} de quien entró — siempre debe quedar identificado
+let ULTIMA_CONFIRMACION_PIN = 0; // timestamp del último PIN correcto
+const VENTANA_PIN_MS = 3*60*1000; // 3 minutos sin volver a pedir PIN entre acciones
+let PIN_REQUIERE_JOHANA = false; // true mientras se pide un PIN que debe ser específicamente el de Johana
+const NOMBRE_JOHANA = 'JOHANA LIZETH MELENDEZ ACOSTA';
+function esJohana(usuario){ return !!usuario && usuario.nombre===NOMBRE_JOHANA; }
 
 const TURNOS     = ['tmat','vesp','noct','sup','ja'];
 const TCAT       = ['tmat','vesp','noct','sup','ja','eventual'];
@@ -407,7 +412,7 @@ INCS.forEach(i=>IMAP[i.c]=i);
 // ESTADO
 // ══════════════════════════════════════════════════════════
 let Q = (()=>{const h=new Date(),d=h.getDate();return{mes:h.getMonth(),anio:h.getFullYear(),q:d>=11&&d<=25?1:2}})();
-let PAG = 'resumen', pinOK=false, pinCB=null, filtP='';
+let PAG = 'resumen', pinCB=null, filtP='';
 let SEL=[], MULTI=false;
 let DB = {personal:[],incidencias:[],eventual:[],textra:[],notas:[]};
 let NID = 1;
@@ -810,7 +815,7 @@ function renderTurno(turno){
   const wrap=document.getElementById('tb-'+turno);
   wrap.innerHTML='';
   if(!todos.length){
-    wrap.innerHTML='<div class="card"><div class="empty">Sin personal. <button class="btn btn-primary" style="margin-left:6px" onclick="rPin(()=>abrirModalPersonal(null,\''+turno+'\'))">+ Agregar</button></div></div>';
+    wrap.innerHTML='<div class="card"><div class="empty">Sin personal. <button class="btn btn-primary" style="margin-left:6px" onclick="rPinJohana(()=>abrirModalPersonal(null,\''+turno+'\'))">+ Agregar</button></div></div>';
     return;
   }
   let thD='';
@@ -884,7 +889,7 @@ function renderTurno(turno){
     const emp=td.dataset.emp;
     const btn=document.createElement('button');
     btn.className='btn btn-ghost'; btn.style.cssText='font-size:10px;padding:3px 7px'; btn.textContent='✏';
-    btn.onclick=()=>rPin(()=>editPersonal(emp));
+    btn.onclick=()=>rPinJohana(()=>editPersonal(emp));
     td.appendChild(btn);
   });
 }
@@ -1224,7 +1229,7 @@ function abrirModalEventual(ev){
     ? '<select id="ev-n" class="fs"><option value="">— Selecciona —</option>'+opcionLegacy+pOpts+'</select>'
     : '<div style="font-size:11px;color:var(--txt3);border:1.5px dashed var(--bg3);border-radius:6px;padding:10px;text-align:center">Aún no hay personal eventual registrado en el catálogo.</div>';
   const html='<div class="fr"><label class="fl">Personal eventual *</label>'+selectorHtml+'</div>'
-    +'<div style="font-size:10px;color:var(--az2);margin:-8px 0 12px;cursor:pointer" onclick="cerrarModal();rPin(()=>abrirModalPersonal(null,\'eventual\'))">+ Registrar nuevo eventual en el catálogo</div>'
+    +'<div style="font-size:10px;color:var(--az2);margin:-8px 0 12px;cursor:pointer" onclick="cerrarModal();rPinJohana(()=>abrirModalPersonal(null,\'eventual\'))">+ Registrar nuevo eventual en el catálogo</div>'
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha *</label><input id="ev-f" type="date" class="fi" value="'+(ev?ev.fecha:'')+'"></div>'
     +'<div class="fr"><label class="fl">Área</label><input id="ev-a" class="fi" value="'+(ev?ev.area:'')+'" placeholder="UCI/UCIM..."></div></div>'
     +'<div class="fr"><label class="fl">Incidencia cubierta</label><input id="ev-ic" class="fi" value="'+(ev?ev.incidenciaCubierta:'')+'" placeholder="Ej. Incapacidad..."></div>'
@@ -1309,7 +1314,7 @@ function renderPersonal(){
       +'<td class="tl"><span class="tbadge">'+(TLBL[p.turno]||p.turno)+'</span></td>'
       +'<td class="tl"><span class="ing">'+p.fechaIngreso+'</span></td><td></td>';
     const btn=document.createElement('button');btn.className='btn btn-ghost';btn.style.cssText='font-size:10px;padding:3px 7px';btn.textContent='✏';
-    (ne=>{btn.onclick=()=>rPin(()=>editPersonal(ne));})(p.noEmp);
+    (ne=>{btn.onclick=()=>rPinJohana(()=>editPersonal(ne));})(p.noEmp);
     tr.lastElementChild.appendChild(btn);tb.appendChild(tr);
   });
 }
@@ -2247,8 +2252,35 @@ function abrirModal(tit,body,onOK,lblOK,extras){
 function cerrarModal(){document.getElementById('modal-main').classList.remove('open');}
 
 // PIN
-function rPin(cb){if(pinOK){cb();return;}pinCB=cb;document.getElementById('pin-err').style.display='none';document.getElementById('pinI').value='';document.getElementById('modal-pin').classList.add('open');setTimeout(()=>document.getElementById('pinI').focus(),100);}
-function abrirPin(){pinOK=false;USUARIO_ACTUAL=null;rPin(()=>{});}
+function rPin(cb){
+  if(USUARIO_ACTUAL&&(Date.now()-ULTIMA_CONFIRMACION_PIN)<VENTANA_PIN_MS){
+    ULTIMA_CONFIRMACION_PIN=Date.now(); // sigue activo: desliza la ventana de gracia
+    cb();
+    return;
+  }
+  PIN_REQUIERE_JOHANA=false;
+  pinCB=cb;
+  document.getElementById('pin-err').style.display='none';
+  document.getElementById('pinI').value='';
+  document.getElementById('modal-pin').classList.add('open');
+  setTimeout(()=>document.getElementById('pinI').focus(),100);
+}
+// Igual que rPin, pero exige que quien confirme sea específicamente Johana —
+// para el Catálogo de Personal y la edición de cada persona.
+function rPinJohana(cb){
+  if(esJohana(USUARIO_ACTUAL)&&(Date.now()-ULTIMA_CONFIRMACION_PIN)<VENTANA_PIN_MS){
+    ULTIMA_CONFIRMACION_PIN=Date.now();
+    cb();
+    return;
+  }
+  PIN_REQUIERE_JOHANA=true;
+  pinCB=cb;
+  document.getElementById('pin-err').style.display='none';
+  document.getElementById('pinI').value='';
+  document.getElementById('modal-pin').classList.add('open');
+  setTimeout(()=>document.getElementById('pinI').focus(),100);
+}
+function abrirPin(){USUARIO_ACTUAL=null;ULTIMA_CONFIRMACION_PIN=0;rPin(()=>{});}
 function buscarUsuarioPorPin(pinIngresado){
   if(!pinIngresado)return null;
   return USUARIOS_AUTORIZADOS.find(u=>u.pin===pinIngresado)||null;
@@ -2257,11 +2289,22 @@ function verPin(){
   const val=document.getElementById('pinI').value;
   const usuario=buscarUsuarioPorPin(val);
   if(usuario){
+    if(PIN_REQUIERE_JOHANA&&!esJohana(usuario)){
+      const err=document.getElementById('pin-err');
+      err.textContent='Esta sección solo la puede usar Johana Lizeth Meléndez Acosta';
+      err.style.display='block';
+      document.getElementById('pinI').value='';
+      return;
+    }
     USUARIO_ACTUAL={nombre:usuario.nombre};
-    pinOK=true;cerrarModalPin();actualizarBotonUsuario();if(pinCB){pinCB();pinCB=null;}
+    ULTIMA_CONFIRMACION_PIN=Date.now();
+    PIN_REQUIERE_JOHANA=false;
+    cerrarModalPin();actualizarBotonUsuario();if(pinCB){pinCB();pinCB=null;}
     return;
   }
-  document.getElementById('pin-err').style.display='block';
+  const err=document.getElementById('pin-err');
+  err.textContent='PIN incorrecto';
+  err.style.display='block';
 }
 function actualizarBotonUsuario(){
   const btn=document.getElementById('btn-usuario');

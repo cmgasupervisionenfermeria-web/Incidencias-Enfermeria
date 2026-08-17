@@ -845,7 +845,7 @@ function renderTurno(turno){
         return;
       }
       const cls=inc?clsInc(inc):'ic-vacio';
-      celdas+='<td class="ic '+cls+'" data-emp="'+p.noEmp+'" data-fecha="'+d.fecha+'" data-turno="'+turno+'" onclick="clickCell(this)" title="'+d.fecha+'">'+(inc||'')+'</td>';
+      celdas+='<td class="ic '+cls+'" data-emp="'+p.noEmp+'" data-fecha="'+d.fecha+'" data-turno="'+turno+'" onclick="clickCell(this)" title="'+d.fecha+(io&&io.capturadoPor?' · Capturado por: '+io.capturadoPor:'')+'">'+(inc||'')+'</td>';
     });
     let badgeCruzado='';
     if(p.turno!==turno){
@@ -1682,7 +1682,7 @@ function renderVacaciones(){
     if(ft&&p.turno!==ft)return;
     const dia=d.getDate();
     if(!porDia[dia])porDia[dia]=[];
-    porDia[dia].push({nombre:p.nombre,turno:p.turno,noEmp:p.noEmp});
+    porDia[dia].push({nombre:p.nombre,turno:p.turno,noEmp:p.noEmp,capturadoPor:i.capturadoPor});
   });
   let html='<div class="card"><div class="wrap"><table class="cal-tbl"><thead><tr>';
   ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].forEach(d=>html+='<th>'+d+'</th>');
@@ -1695,7 +1695,7 @@ function renderVacaciones(){
     const fechaCelda=fStr(anio,mes,dia);
     html+='<td style="'+(esHoy?'background:var(--az3);':'')+'cursor:pointer" onclick="rPin(()=>abrirModalVacacion({fecha:\''+fechaCelda+'\'}))" title="Clic para agregar vacación el '+fechaCelda+'">'
       +'<div style="font-size:10px;font-weight:700;color:'+(esHoy?'var(--az2)':'var(--txt3)')+';margin-bottom:3px">'+dia+'</div>'
-      +gente.map(g=>{const c=VAC_COLOR_TURNO[g.turno]||VAC_COLOR_TURNO.vesp;return '<div style="font-size:9px;background:'+c.bg+';color:'+c.fg+';border-radius:3px;padding:1px 4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="'+g.nombre+' — '+(TLBL[g.turno]||g.turno)+' · clic para quitar" onclick="event.stopPropagation();rPin(()=>elimVacacionDia(\''+g.noEmp+'\',\''+fechaCelda+'\',\''+g.nombre.replace(/'/g,"\\'")+'\'))">'+g.nombre.split(' ')[0]+'</div>';}).join('')
+      +gente.map(g=>{const c=VAC_COLOR_TURNO[g.turno]||VAC_COLOR_TURNO.vesp;return '<div style="font-size:9px;background:'+c.bg+';color:'+c.fg+';border-radius:3px;padding:1px 4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="'+g.nombre+' — '+(TLBL[g.turno]||g.turno)+(g.capturadoPor?' · Registrado por: '+g.capturadoPor:'')+' · clic para quitar" onclick="event.stopPropagation();rPin(()=>elimVacacionDia(\''+g.noEmp+'\',\''+fechaCelda+'\',\''+g.nombre.replace(/'/g,"\\'")+'\'))">'+g.nombre.split(' ')[0]+'</div>';}).join('')
       +'</td>';
     col++;
     if(col%7===0&&dia!==diasEnMes)html+='</tr><tr>';

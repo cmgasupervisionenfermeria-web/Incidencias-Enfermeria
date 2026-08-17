@@ -151,7 +151,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
       <div id="buscador-res"></div>
     </div>
     <button class="btn-pin" style="background:#1A8A6F" onclick="rPin(descargarRespaldoCompleto)">💾 Respaldo</button>
-    <button class="btn-pin" onclick="abrirPin()">🔒 PIN</button>
+    <button class="btn-pin" id="btn-usuario" onclick="abrirPin()">🔒 PIN</button>
   </div>
 </nav>
 <div id="sync-banner" style="display:none;position:sticky;top:52px;z-index:90;background:#FEE2E2;color:#B91C1C;padding:6px 14px;font-size:11px;font-weight:700;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap">
@@ -366,8 +366,17 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 // CONFIG
 // ══════════════════════════════════════════════════════════
 const GAS = 'https://script.google.com/macros/s/AKfycbzh3URKmmoWWDW9fyQDPCClFd65YLRrIklxaM62bqEMJPwVCDDEuBqvCM_uy4g22iB6xA/exec';
-const PIN  = 'CMGA1';
 const KEY  = 'inc_cmga_v1';
+// Único acceso a la app — solo estas 5 personas tienen PIN. No hay PIN
+// general de respaldo: quien no esté en esta lista no puede entrar.
+const USUARIOS_AUTORIZADOS = [
+  {nombre:'ADRIANA JEANNETTE ESQUIVEL LÓPEZ', pin:'4711'},
+  {nombre:'FANNY MONSERRAT RANGEL LOPEZ',     pin:'9863'},
+  {nombre:'FERNANDO RAMIREZ SOLIS',           pin:'2606'},
+  {nombre:'JOHANA LIZETH MELENDEZ ACOSTA',    pin:'9657'},
+  {nombre:'NORMA PATRICIA SANCHEZ RODRIGUEZ', pin:'2602'}
+];
+let USUARIO_ACTUAL = null; // {nombre} de quien entró — siempre debe quedar identificado
 
 const TURNOS     = ['tmat','vesp','noct','sup','ja'];
 const TCAT       = ['tmat','vesp','noct','sup','ja','eventual'];
@@ -413,7 +422,7 @@ async function apiCall(params) {
   const p = new URLSearchParams();
   Object.keys(params).forEach(k => p.append(k, params[k]));
   try {
-    const r = await fetch(GAS + '?' + p.toString());
+    const r = await fetch(GAS + '?' + p.toString(), {keepalive:true});
     return await r.json();
   } catch(e) { console.error('apiCall error:', e); encolarSyncFallido(params); return {ok:false}; }
 }
@@ -442,7 +451,7 @@ async function reintentarSync(silencioso){
     try{
       const p=new URLSearchParams();
       Object.keys(item.params).forEach(k=>p.append(k,item.params[k]));
-      const r=await fetch(GAS+'?'+p.toString());
+      const r=await fetch(GAS+'?'+p.toString(),{keepalive:true});
       await r.json();
       SYNC_QUEUE=SYNC_QUEUE.filter(x=>x.id!==item.id);
     }catch(e){ /* sigue en la cola */ }
@@ -468,9 +477,9 @@ async function syncIncsBatch(registros) {
   if(!registros.length)return; guardarLocal();
   apiCall({action:'saveIncidencias', records:JSON.stringify(registros)});
 }
-async function syncInc(noEmp,fecha,inc,obs) {
+async function syncInc(noEmp,fecha,inc,obs,capturadoPor) {
   guardarLocal();
-  apiCall({action:'saveIncidencia', noEmp:noEmp, fecha:fecha, incidencia:inc||'', observacion:obs||''});
+  apiCall({action:'saveIncidencia', noEmp:noEmp, fecha:fecha, incidencia:inc||'', observacion:obs||'', capturadoPor:capturadoPor||''});
 }
 async function syncPersonal(rec) {
   guardarLocal(); apiCall({action:'savePersonal', record:JSON.stringify(rec)});
@@ -928,13 +937,14 @@ function aplicarMulti(inc){
   if(!SEL.length)return;
   rPin(()=>{
     const turno=SEL[0].turno;
+    const capturadoPor=USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'';
     const batch=[];
     SEL.forEach(x=>{
       const v=validar(x.noEmp,x.fecha,inc);
       if(!v.ok&&v.tipo!=='advertencia')return;
       DB.incidencias=DB.incidencias.filter(i=>!(i.noEmp===x.noEmp&&i.fecha===x.fecha));
-      if(inc)DB.incidencias.push({id:String(NID++),noEmp:x.noEmp,fecha:x.fecha,incidencia:inc,observacion:''});
-      batch.push({noEmp:x.noEmp,fecha:x.fecha,incidencia:inc||'',observacion:''});
+      if(inc)DB.incidencias.push({id:String(NID++),noEmp:x.noEmp,fecha:x.fecha,incidencia:inc,observacion:'',capturadoPor});
+      batch.push({noEmp:x.noEmp,fecha:x.fecha,incidencia:inc||'',observacion:'',capturadoPor});
     });
     guardarLocal();cancelarMulti();renderTurno(turno);
     // Una sola petición para todas — evita IDs duplicados
@@ -967,11 +977,12 @@ function copiarDia(){
         const de=document.getElementById('cd-de').value,a=document.getElementById('cd-a').value;
         if(de===a){toast('Selecciona días diferentes');return;}
         const personal=DB.personal.filter(p=>p.turno===PAG);
+        const capturadoPorCopia=USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'';
         let n=0,batch=[];
         personal.forEach(p=>{
           if(DB.incidencias.some(i=>i.noEmp===p.noEmp&&i.fecha===a))return;
           const orig=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===de)[0];
-          if(orig){DB.incidencias.push({id:String(NID++),noEmp:p.noEmp,fecha:a,incidencia:orig.incidencia,observacion:''});n++;batch.push({noEmp:p.noEmp,fecha:a,incidencia:orig.incidencia,observacion:''});}
+          if(orig){DB.incidencias.push({id:String(NID++),noEmp:p.noEmp,fecha:a,incidencia:orig.incidencia,observacion:'',capturadoPor:capturadoPorCopia});n++;batch.push({noEmp:p.noEmp,fecha:a,incidencia:orig.incidencia,observacion:'',capturadoPor:capturadoPorCopia});}
         });
         guardarLocal();cerrarModal();cancelarMulti();renderTurno(PAG);
         if(batch.length)syncIncsBatch(batch);
@@ -993,6 +1004,7 @@ function abrirPicker(noEmp,fecha,turno){
   INCS.forEach(i=>html+='<div class="ipb '+i.cls+(_inc===i.c?' sel':'')+'" onclick="selInc(this,\''+i.c+'\')" data-c="'+i.c+'">'+i.c+'<br><span style="font-size:7px;font-weight:400">'+i.l+'</span></div>');
   html+='</div><button class="ipv" onclick="selInc(null,\'\')">✕ Vaciar celda</button></div>';
   html+='<div class="fr"><label class="fl">Observación (opcional)</label><textarea id="obs-i" class="ft" rows="2">'+(io?io.observacion||'':'')+'</textarea></div>';
+  if(io&&io.capturadoPor)html+='<div style="font-size:10px;color:var(--txt3)">🕐 Capturado por: <b>'+io.capturadoPor+'</b></div>';
   abrirModal((p?p.nombre:noEmp)+' — '+fecha,html,()=>{
     const obs=document.getElementById('obs-i').value.trim();
     const v=validar(noEmp,fecha,_inc);
@@ -1012,9 +1024,10 @@ function abrirPicker(noEmp,fecha,turno){
 }
 function selInc(el,c){document.querySelectorAll('.ipb').forEach(b=>b.classList.remove('sel'));if(el)el.classList.add('sel');_inc=c;}
 function _guardarInc(noEmp,fecha,turno,inc,obs){
+  const capturadoPor=USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'';
   DB.incidencias=DB.incidencias.filter(i=>!(i.noEmp===noEmp&&i.fecha===fecha));
-  if(inc)DB.incidencias.push({id:String(NID++),noEmp,fecha,incidencia:inc,observacion:obs});
-  guardarLocal();renderTurno(turno);syncInc(noEmp,fecha,inc,obs);
+  if(inc)DB.incidencias.push({id:String(NID++),noEmp,fecha,incidencia:inc,observacion:obs,capturadoPor});
+  guardarLocal();renderTurno(turno);syncInc(noEmp,fecha,inc,obs,capturadoPor);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1115,7 +1128,8 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     +'<option value="2"'+(p&&p.multVacacion==='2'?' selected':'')+'>Como Nocturno — 1 día tomado = 2 días de saldo</option>'
     +'<option value="3"'+(p&&p.multVacacion==='3'?' selected':'')+'>Como J. Acumulada — 1 día tomado = 3 días de saldo</option>'
     +'</select></div>'
-    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Solo para casos como Supervisoras que en realidad cubren guardias de 12 o 14 horas — hace que su cálculo de vacaciones siga esa regla aunque su turno base sea otro.</div>';
+    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Solo para casos como Supervisoras que en realidad cubren guardias de 12 o 14 horas — hace que su cálculo de vacaciones siga esa regla aunque su turno base sea otro.</div>'
+    +(p&&p.ultimaEdicionPor?'<div style="font-size:10px;color:var(--txt3);background:var(--bg2);border-radius:6px;padding:6px 10px;margin-bottom:12px">🕐 Última edición: <b>'+p.ultimaEdicionPor+'</b>'+(p.ultimaEdicionFecha?' — '+p.ultimaEdicionFecha:'')+'</div>':'');
   const extra=[];
   if(p){
     if(esBaja) extra.push({lbl:'↩️ Reactivar',cls:'btn-ghost',fn:()=>reactivarPersonal(noEmpEdit)});
@@ -1145,7 +1159,10 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     if(daRaw&&!daParsed){toast('⚠ Formato de días de asistencia no reconocido — usa dom, lun, mar, mie, jue, vie, sab');return;}
     const diasAsistencia=daParsed?serializarDiasAsistencia(daParsed):'';
     const multVacacion=document.getElementById('fmv').value;
-    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):''),horarioMixto,permuta,diasAsistencia,multVacacion};
+    const hoy=new Date();
+    const ultimaEdicionPor=USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'Sin identificar';
+    const ultimaEdicionFecha=fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
+    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):''),horarioMixto,permuta,diasAsistencia,multVacacion,ultimaEdicionPor,ultimaEdicionFecha};
     if(noEmpEdit){
       const idx=DB.personal.findIndex(x=>x.noEmp===noEmpEdit);
       if(idx>=0){rec.id=DB.personal[idx].id;DB.personal[idx]=rec;}
@@ -1163,7 +1180,7 @@ function darDeBajaPersonal(noEmp){
   if(!p)return;
   if(!confirm('¿Dar de baja a '+p.nombre+'? Dejará de aparecer en las tablas activas, pero todo su historial (incidencias, Concentrado, Historial Anual, vacaciones pasadas) se conserva.'))return;
   const hoy=new Date();
-  const rec=Object.assign({},p,{activo:'0',fechaBaja:fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate())});
+  const rec=Object.assign({},p,{activo:'0',fechaBaja:fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()),ultimaEdicionPor:USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'Sin identificar',ultimaEdicionFecha:fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate())});
   const idx=DB.personal.findIndex(x=>x.noEmp===noEmp);
   if(idx>=0)DB.personal[idx]=rec;
   guardarLocal();cerrarModal();toast('🚫 '+p.nombre+' dado de baja — su historial se conservó');renderPag(PAG);syncPersonal(rec);
@@ -1171,7 +1188,8 @@ function darDeBajaPersonal(noEmp){
 function reactivarPersonal(noEmp){
   const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
   if(!p)return;
-  const rec=Object.assign({},p,{activo:'1',fechaBaja:''});
+  const hoy=new Date();
+  const rec=Object.assign({},p,{activo:'1',fechaBaja:'',ultimaEdicionPor:USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'Sin identificar',ultimaEdicionFecha:fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate())});
   const idx=DB.personal.findIndex(x=>x.noEmp===noEmp);
   if(idx>=0)DB.personal[idx]=rec;
   guardarLocal();cerrarModal();toast('↩️ '+p.nombre+' reactivado');renderPag(PAG);syncPersonal(rec);
@@ -1589,12 +1607,13 @@ function abrirModalVacacion(prefill){
     const forzarEl=document.getElementById('vc-forzar-anios');
     const forzarAniosReg=forzarEl?parseInt(forzarEl.value,10):NaN;
     const periodoVacTag=(forzarAniosReg>=1)?String(forzarAniosReg):'';
+    const capturadoPorVac=USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'';
     const aplicar=()=>{
       const batch=[];
       fechas.forEach(f=>{
         DB.incidencias=DB.incidencias.filter(i=>!(i.noEmp===noEmp&&i.fecha===f));
-        DB.incidencias.push({id:String(NID++),noEmp,fecha:f,incidencia:'V',observacion:'',periodoVac:periodoVacTag});
-        batch.push({noEmp,fecha:f,incidencia:'V',observacion:'',periodoVac:periodoVacTag});
+        DB.incidencias.push({id:String(NID++),noEmp,fecha:f,incidencia:'V',observacion:'',periodoVac:periodoVacTag,capturadoPor:capturadoPorVac});
+        batch.push({noEmp,fecha:f,incidencia:'V',observacion:'',periodoVac:periodoVacTag,capturadoPor:capturadoPorVac});
       });
       guardarLocal();cerrarModal();renderVacaciones();
       if(TURNOS.includes(PAG))renderPag(PAG);
@@ -2229,8 +2248,27 @@ function cerrarModal(){document.getElementById('modal-main').classList.remove('o
 
 // PIN
 function rPin(cb){if(pinOK){cb();return;}pinCB=cb;document.getElementById('pin-err').style.display='none';document.getElementById('pinI').value='';document.getElementById('modal-pin').classList.add('open');setTimeout(()=>document.getElementById('pinI').focus(),100);}
-function abrirPin(){pinOK=false;rPin(()=>{});}
-function verPin(){if(document.getElementById('pinI').value===PIN){pinOK=true;cerrarModalPin();if(pinCB){pinCB();pinCB=null;}}else document.getElementById('pin-err').style.display='block';}
+function abrirPin(){pinOK=false;USUARIO_ACTUAL=null;rPin(()=>{});}
+function buscarUsuarioPorPin(pinIngresado){
+  if(!pinIngresado)return null;
+  return USUARIOS_AUTORIZADOS.find(u=>u.pin===pinIngresado)||null;
+}
+function verPin(){
+  const val=document.getElementById('pinI').value;
+  const usuario=buscarUsuarioPorPin(val);
+  if(usuario){
+    USUARIO_ACTUAL={nombre:usuario.nombre};
+    pinOK=true;cerrarModalPin();actualizarBotonUsuario();if(pinCB){pinCB();pinCB=null;}
+    return;
+  }
+  document.getElementById('pin-err').style.display='block';
+}
+function actualizarBotonUsuario(){
+  const btn=document.getElementById('btn-usuario');
+  if(!btn)return;
+  btn.textContent=USUARIO_ACTUAL?('👤 '+USUARIO_ACTUAL.nombre.split(' ')[0]):'🔒 PIN';
+  btn.title=USUARIO_ACTUAL?('Sesión de '+USUARIO_ACTUAL.nombre+' — clic para cambiar de usuario'):'Sin identificar — clic para entrar con tu PIN personal';
+}
 function cerrarModalPin(){document.getElementById('modal-pin').classList.remove('open');}
 
 // LOADER / TOAST
@@ -2274,10 +2312,10 @@ async function cargarDatos(){
     const str = v=>(v!==null&&v!==undefined)?String(v):'';
     const fecha = v=>v?String(v).substring(0,10):'';
     if(Array.isArray(data.personal)&&data.personal.length>0){
-      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja),horarioMixto:str(p.horarioMixto),permuta:str(p.permuta),diasAsistencia:str(p.diasAsistencia),multVacacion:str(p.multVacacion)}));
+      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja),horarioMixto:str(p.horarioMixto),permuta:str(p.permuta),diasAsistencia:str(p.diasAsistencia),multVacacion:str(p.multVacacion),pinPersonal:str(p.pinPersonal),ultimaEdicionPor:str(p.ultimaEdicionPor),ultimaEdicionFecha:fecha(p.ultimaEdicionFecha)}));
     }
     if(Array.isArray(data.incidencias)){
-      DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion),periodoVac:str(i.periodoVac)}));
+      DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion),periodoVac:str(i.periodoVac),capturadoPor:str(i.capturadoPor)}));
     }
     if(Array.isArray(data.eventual)){
       DB.eventual=data.eventual.map(e=>({id:str(e.id),nombre:str(e.nombre),noEmp:str(e.noEmp),fecha:fecha(e.fecha),area:str(e.area),incidenciaCubierta:str(e.incidenciaCubierta),observacion:str(e.observacion)}));

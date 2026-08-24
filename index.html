@@ -2054,6 +2054,47 @@ function imprimirSolicitudVacacion(){
   win.document.close();
 }
 
+const DIA_LARGO_ES=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+// Lista (no solo cuenta) de los días V que cuentan contra un período —
+// misma lógica de inclusión que diasVacacionTomadosEnPeriodo, pero
+// devolviendo las fechas para mostrarlas una por una.
+function fechasVacacionEnPeriodo(noEmp,per){
+  return DB.incidencias.filter(i=>{
+    if(i.noEmp!==noEmp||i.incidencia!=='V')return false;
+    if(i.periodoVac)return String(i.periodoVac)===String(per.anioServicio);
+    const d=new Date(i.fecha+'T12:00:00');
+    return d>=per.inicio&&d<per.fin;
+  }).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+}
+function abrirDesgloseVacaciones(noEmp){
+  const p=DB.personal.find(x=>x.noEmp===noEmp);
+  if(!p){toast('Empleado no encontrado');return;}
+  const per=periodoVacActual(p.fechaIngreso);
+  if(!per||!per.ingresoValido||per.anioServicio<1){
+    abrirModal('🏖 Desglose de vacaciones — '+p.nombre,'<div class="empty">Sin período vigente o menos de 1 año de antigüedad.</div>',null,'');
+    return;
+  }
+  const marcados=fechasVacacionEnPeriodo(noEmp,per);
+  const filas=marcados.map(i=>{
+    const peso=multiplicadorVacacionDia(p,i.fecha);
+    const dow=DIA_LARGO_ES[new Date(i.fecha+'T12:00:00').getDay()];
+    const fechaFmt=i.fecha.split('-').reverse().join('/');
+    const adelantoTag=i.periodoVac?' <span style="color:#7E22CE;font-size:9px;font-weight:700">· adelanto año '+i.periodoVac+'</span>':'';
+    return '<tr><td class="tl">'+fechaFmt+adelantoTag+'</td><td class="tl">'+dow+'</td>'
+      +'<td style="text-align:center">'+(peso>1?'×'+peso:'—')+'</td>'
+      +'<td style="text-align:center;font-weight:700">'+peso+'</td>'
+      +'<td><button class="btn btn-ghost" style="font-size:9px;padding:2px 6px" onclick="event.stopPropagation();rPin(()=>{elimVacacionDia(\''+noEmp+'\',\''+i.fecha+'\',\''+p.nombre.replace(/'/g,"\\'")+'\');cerrarModal();setTimeout(()=>abrirDesgloseVacaciones(\''+noEmp+'\'),300);})">✕</button></td></tr>';
+  }).join('');
+  const totalDias=marcados.reduce((s,i)=>s+multiplicadorVacacionDia(p,i.fecha),0);
+  const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
+  const finStr=fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate());
+  const html=marcados.length
+    ? '<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Período vigente: '+iniStr+' – '+finStr+' (año '+per.anioServicio+') · Corresponden: '+per.dias+' días</div>'
+      +'<div class="wrap"><table class="tbl"><thead><tr><th class="tl">Fecha</th><th class="tl">Día</th><th>Regla</th><th>Equivale</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div>'
+      +'<div style="margin-top:10px;font-size:12px;font-weight:700;text-align:right">Total tomado: '+totalDias+' día'+(totalDias!==1?'s':'')+' de '+per.dias+' · Saldo: '+(per.dias-totalDias)+'</div>'
+    : '<div class="empty">Sin vacaciones registradas en el período vigente</div>';
+  abrirModal('🏖 Desglose de vacaciones — '+p.nombre,html,null,'');
+}
 function renderSaldoVac(){
   const ft=document.getElementById('sv-turno')?document.getElementById('sv-turno').value:'';
   const pers=DB.personal.filter(p=>p.tipo!=='pasante'&&p.turno!=='eventual'&&p.activo!=='0'&&(!ft||p.turno===ft)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
@@ -2082,7 +2123,7 @@ function renderSaldoVac(){
       : diasVence<=7 ? '<span style="color:var(--rojo);font-weight:700">🔴 '+diasVence+' d.</span>'
       : diasVence<=30 ? '<span style="color:var(--naranja);font-weight:700">🟠 '+diasVence+' d.</span>'
       : '<span style="color:var(--txt3)">'+diasVence+' d.</span>';
-    filas+='<tr><td class="tl"><span class="emp">'+p.noEmp+'</span></td><td class="tl"><span class="nom">'+p.nombre+'</span></td>'
+    filas+='<tr style="cursor:pointer" title="Clic para ver el desglose de fechas" onclick="abrirDesgloseVacaciones(\''+p.noEmp+'\')"><td class="tl"><span class="emp">'+p.noEmp+'</span></td><td class="tl"><span class="nom">'+p.nombre+'</span></td>'
       +'<td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td>'
       +'<td class="tl" style="font-size:10px;color:var(--txt2)">'+iniStr+' – '+finStr+' (año '+per.anioServicio+')</td>'
       +'<td style="text-align:center;font-weight:700">'+per.dias+'</td>'

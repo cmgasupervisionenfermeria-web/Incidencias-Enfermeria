@@ -1585,8 +1585,6 @@ function renderHorariosEspeciales(){
       if(hoyStr>pm.fFin)return; // ya terminó, no mostrar
       filas.push({tipo:'permuta',nombre:p.nombre,turno:p.turno,detalle:'a '+(TLBL[pm.turno]||pm.turno)+' del '+pm.fIni+' al '+pm.fFin,vigente,futura});
     });
-    const diasAsis=parseDiasAsistencia(p.diasAsistencia);
-    if(diasAsis)filas.push({tipo:'asistencia',nombre:p.nombre,turno:p.turno,detalle:serializarDiasAsistencia(diasAsis)});
     const pl=parsePermisoLactancia(p.permisoLactancia);
     if(pl&&hoyStr<=pl.fFin){
       const vigente=hoyStr>=pl.fIni;
@@ -1595,9 +1593,9 @@ function renderHorariosEspeciales(){
   });
   if(!filas.length){el.innerHTML='';return;}
   filas.sort((a,b)=>a.nombre.localeCompare(b.nombre));
-  const ICONO={mixto:'↔',permuta:null,asistencia:'📅',lactancia:'🍼'};
-  const COLOR={mixto:['#EEF2FF','#4F46E5'],permuta:['#F3E8FF','#7E22CE'],asistencia:['#F1F5F9','#475569'],lactancia:['#FCE7F3','#BE185D']};
-  const ETIQUETA={mixto:'horario mixto',permuta:'permuta',asistencia:'asiste',lactancia:'lactancia'};
+  const ICONO={mixto:'↔',permuta:null,lactancia:'🍼'};
+  const COLOR={mixto:['#EEF2FF','#4F46E5'],permuta:['#F3E8FF','#7E22CE'],lactancia:['#FCE7F3','#BE185D']};
+  const ETIQUETA={mixto:'horario mixto',permuta:'permuta',lactancia:'lactancia'};
   el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🔀 Horarios especiales vigentes</div>'
     +filas.map(f=>{
       const icono=f.tipo==='permuta'?(f.futura?'📅':'🔄'):ICONO[f.tipo];

@@ -1464,9 +1464,9 @@ function renderResumen(){
     let sinReg=0, celdasTot=0;
     pers.forEach(p=>{
       fechas.forEach(f=>{
-        if(!esDiaAplicable(p,t,f))return;
-        celdasTot++;
         const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===f)[0];
+        if(celdaBloqueada(p,t,f)&&!io)return;
+        celdasTot++;
         const c=io?io.incidencia:'—';
         cont[c]=(cont[c]||0)+1;
         if(c==='—')sinReg++;
@@ -1482,7 +1482,9 @@ function renderResumen(){
       +'<div class="dash-stat"><b style="color:#15803D">'+vac+'</b>Vacac.</div>'
       +'<div class="dash-stat"><b style="color:#7E22CE">'+inc+'</b>Incap.</div>'
       +'<div class="dash-stat"><b style="color:var(--txt3)">'+sinReg+'</b>S/reg.</div>'
-      +'</div></div>';
+      +'</div>'
+      +(celdasTot?'<div style="padding:0 14px 12px"><div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden"><div style="height:100%;width:'+Math.round((celdasTot-sinReg)/celdasTot*100)+'%;background:'+(sinReg===0?'#15803D':(sinReg/celdasTot>0.3?'var(--rojo)':'var(--naranja)'))+'"></div></div><div style="font-size:9px;color:var(--txt3);margin-top:3px;text-align:right">'+Math.round((celdasTot-sinReg)/celdasTot*100)+'% capturado</div></div>':'')
+      +'</div>';
   });
   const cardsEl=document.getElementById('resumen-cards');
   if(cardsEl)cardsEl.innerHTML=cards||'<div class="empty">Sin personal registrado</div>';
@@ -1583,15 +1585,25 @@ function renderHorariosEspeciales(){
       if(hoyStr>pm.fFin)return; // ya terminó, no mostrar
       filas.push({tipo:'permuta',nombre:p.nombre,turno:p.turno,detalle:'a '+(TLBL[pm.turno]||pm.turno)+' del '+pm.fIni+' al '+pm.fFin,vigente,futura});
     });
+    const diasAsis=parseDiasAsistencia(p.diasAsistencia);
+    if(diasAsis)filas.push({tipo:'asistencia',nombre:p.nombre,turno:p.turno,detalle:serializarDiasAsistencia(diasAsis)});
+    const pl=parsePermisoLactancia(p.permisoLactancia);
+    if(pl&&hoyStr<=pl.fFin){
+      const vigente=hoyStr>=pl.fIni;
+      filas.push({tipo:'lactancia',nombre:p.nombre,turno:p.turno,detalle:(pl.tipo==='salida'?'sale 1h antes':'llega 1h tarde')+' — hasta '+pl.fFin,vigente,futura:!vigente});
+    }
   });
   if(!filas.length){el.innerHTML='';return;}
   filas.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const ICONO={mixto:'↔',permuta:null,asistencia:'📅',lactancia:'🍼'};
+  const COLOR={mixto:['#EEF2FF','#4F46E5'],permuta:['#F3E8FF','#7E22CE'],asistencia:['#F1F5F9','#475569'],lactancia:['#FCE7F3','#BE185D']};
+  const ETIQUETA={mixto:'horario mixto',permuta:'permuta',asistencia:'asiste',lactancia:'lactancia'};
   el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🔀 Horarios especiales vigentes</div>'
     +filas.map(f=>{
-      const icono=f.tipo==='mixto'?'↔':(f.futura?'📅':'🔄');
-      const bg=f.tipo==='mixto'?'#EEF2FF':'#F3E8FF', color=f.tipo==='mixto'?'#4F46E5':'#7E22CE';
-      const estado=f.tipo==='permuta'?(f.futura?' <span style="color:var(--txt3)">(próxima)</span>':' <span style="color:#15803D;font-weight:700">(vigente)</span>'):'';
-      return '<div class="ai" style="background:'+bg+';border-left:3px solid '+color+'">'+icono+' <b>'+f.nombre+'</b> <span style="color:var(--txt3)">('+(TLBL[f.turno]||f.turno)+')</span> — '+(f.tipo==='mixto'?'horario mixto: '+f.detalle:'permuta '+f.detalle)+estado+'</div>';
+      const icono=f.tipo==='permuta'?(f.futura?'📅':'🔄'):ICONO[f.tipo];
+      const [bg,color]=COLOR[f.tipo];
+      const estado=(f.tipo==='permuta'||f.tipo==='lactancia')?(f.futura?' <span style="color:var(--txt3)">(próxima)</span>':' <span style="color:#15803D;font-weight:700">(vigente)</span>'):'';
+      return '<div class="ai" style="background:'+bg+';border-left:3px solid '+color+'">'+icono+' <b>'+f.nombre+'</b> <span style="color:var(--txt3)">('+(TLBL[f.turno]||f.turno)+')</span> — '+ETIQUETA[f.tipo]+': '+f.detalle+estado+'</div>';
     }).join('')+'</div>';
 }
 function parseFechaIngreso(str){

@@ -606,6 +606,32 @@ function permutaActivaEnFecha(p,fechaStr){
 }
 
 // ══════════════════════════════════════════════════════════
+// PERMISO DE LACTANCIA — quien tiene permiso legal de llegar 1
+// hora tarde o salir 1 hora antes. Se guarda en p.permisoLactancia
+// como "entrada:AAAA-MM-DD a AAAA-MM-DD" (llega tarde) o
+// "salida:AAAA-MM-DD a AAAA-MM-DD" (sale temprano). Es informativo
+// — se muestra como aviso en sus tablas de turno mientras está
+// vigente, no afecta vacaciones ni ningún cálculo.
+// ══════════════════════════════════════════════════════════
+function parsePermisoLactancia(str){
+  if(!str||!String(str).trim())return null;
+  const m=String(str).trim().match(/^(entrada|salida)\s*:\s*(\d{4}-\d{2}-\d{2})\s*a\s*(\d{4}-\d{2}-\d{2})$/i);
+  if(!m)return null;
+  const tipo=m[1].toLowerCase(),fIni=m[2],fFin=m[3];
+  if(fFin<fIni)return null;
+  return{tipo,fIni,fFin};
+}
+function serializarPermisoLactancia(obj){
+  return obj?(obj.tipo+':'+obj.fIni+' a '+obj.fFin):'';
+}
+// ¿El permiso se traslapa con este rango de fechas (p.ej. la quincena que se está viendo)?
+function permisoLactanciaEnRango(p,fIniStr,fFinStr){
+  const pl=parsePermisoLactancia(p.permisoLactancia);
+  if(!pl)return null;
+  return(pl.fIni<=fFinStr&&pl.fFin>=fIniStr)?pl:null;
+}
+
+// ══════════════════════════════════════════════════════════
 // DÍAS DE ASISTENCIA INDIVIDUAL — para turnos sin patrón fijo
 // (Nocturno, Supervisoras): se guarda en p.diasAsistencia como
 // "lun, mie, vie" — los días que SÍ asiste. El resto de días de
@@ -854,7 +880,9 @@ function renderTurno(turno){
         ? ' <span class="ab" style="background:#F3E8FF;color:#7E22CE" title="Permuta temporal — su turno normal es '+(TLBL[p.turno]||p.turno)+'">🔄 hasta '+permAqui.fFin.slice(8,10)+'/'+permAqui.fFin.slice(5,7)+'</span>'
         : ' <span class="ab" style="background:#EEF2FF;color:#4F46E5" title="Horario mixto — su turno normal es '+(TLBL[p.turno]||p.turno)+'">↔ mixto</span>';
     }
-    const nomH=(esPas?'🎓 ':'')+p.nombre+badgeCruzado+(esPas&&p.finRotacion?'<br><small style="color:var(--txt3)">Hasta:'+p.finRotacion+'</small>':'');
+    const plAqui=dias.length?permisoLactanciaEnRango(p,dias[0].fecha,dias[dias.length-1].fecha):null;
+    const badgeLactancia=plAqui?' <span class="ab" style="background:#FCE7F3;color:#BE185D" title="Permiso de lactancia vigente del '+plAqui.fIni+' al '+plAqui.fFin+'">🍼 '+(plAqui.tipo==='salida'?'sale 1h antes':'llega 1h tarde')+'</span>':'';
+    const nomH=(esPas?'🎓 ':'')+p.nombre+badgeCruzado+badgeLactancia+(esPas&&p.finRotacion?'<br><small style="color:var(--txt3)">Hasta:'+p.finRotacion+'</small>':'');
     return '<tr class="'+rowC+'" style="'+bgR+'" data-remp="'+p.noEmp+'">'
       +'<td class="tl"><span class="emp">'+p.noEmp+'</span>'+bM+bPs+'</td>'
       +'<td class="tl"><span class="nom"'+(esPas?' style="color:var(--az2)"':'')+'>'+nomH+'</span></td>'
@@ -1135,6 +1163,9 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     +'<option value="mixto3"'+(p&&p.multVacacion==='mixto3'?' selected':'')+'>Mixta — lunes a viernes ×1, sábado/domingo/festivo ×3 (como J. Acumulada)</option>'
     +'</select></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Solo para casos como Supervisoras que en realidad cubren guardias de 12 o 14 horas — hace que su cálculo de vacaciones siga esa regla aunque su turno base sea otro. La opción "Mixta" evalúa cada día de vacación por separado según qué día de la semana cayó, para quien tiene cambio de turno entre semana normal y guardias de fin de semana/festivo.</div>'
+    +'<div class="fr2"><div class="fr"><label class="fl">Permiso de lactancia (opcional)</label><select id="fpl-tipo" class="fs"><option value="">— Ninguno —</option><option value="entrada"'+(p&&p.permisoLactancia&&p.permisoLactancia.indexOf('entrada:')===0?' selected':'')+'>Llega 1 hora tarde</option><option value="salida"'+(p&&p.permisoLactancia&&p.permisoLactancia.indexOf('salida:')===0?' selected':'')+'>Sale 1 hora antes</option></select></div>'
+    +'<div class="fr" id="fpl-fechas-wrap" style="'+((p&&parsePermisoLactancia(p.permisoLactancia))?'':'opacity:.4')+'"><label class="fl">Vigente del / al</label><div style="display:flex;gap:4px"><input id="fpl-ini" type="date" class="fi" value="'+((p&&parsePermisoLactancia(p.permisoLactancia))?parsePermisoLactancia(p.permisoLactancia).fIni:'')+'"><input id="fpl-fin" type="date" class="fi" value="'+((p&&parsePermisoLactancia(p.permisoLactancia))?parsePermisoLactancia(p.permisoLactancia).fFin:'')+'"></div></div></div>'
+    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Para quien tiene permiso de llegar tarde o salir antes por lactancia. Se muestra como aviso en sus tablas de turno mientras esté vigente — es solo informativo, no afecta vacaciones ni ningún cálculo.</div>'
     +(p&&p.ultimaEdicionPor?'<div style="font-size:10px;color:var(--txt3);background:var(--bg2);border-radius:6px;padding:6px 10px;margin-bottom:12px">🕐 Última edición: <b>'+p.ultimaEdicionPor+'</b>'+(p.ultimaEdicionFecha?' — '+p.ultimaEdicionFecha:'')+'</div>':'');
   const extra=[];
   if(p){
@@ -1165,10 +1196,18 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     if(daRaw&&!daParsed){toast('⚠ Formato de días de asistencia no reconocido — usa dom, lun, mar, mie, jue, vie, sab');return;}
     const diasAsistencia=daParsed?serializarDiasAsistencia(daParsed):'';
     const multVacacion=document.getElementById('fmv').value;
+    const plTipo=document.getElementById('fpl-tipo').value;
+    let permisoLactancia='';
+    if(plTipo){
+      const plIni=document.getElementById('fpl-ini').value, plFin=document.getElementById('fpl-fin').value;
+      if(!plIni||!plFin){toast('⚠ Completa las fechas del permiso de lactancia (o quita el tipo si no aplica)');return;}
+      if(plFin<plIni){toast('⚠ La fecha final del permiso de lactancia debe ser posterior a la inicial');return;}
+      permisoLactancia=plTipo+':'+plIni+' a '+plFin;
+    }
     const hoy=new Date();
     const ultimaEdicionPor=USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'Sin identificar';
     const ultimaEdicionFecha=fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
-    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):''),horarioMixto,permuta,diasAsistencia,multVacacion,ultimaEdicionPor,ultimaEdicionFecha};
+    const rec={noEmp,nombre,turno,puesto,fechaIngreso,tipo:tipo||'base',finRotacion:finRotacion||'',activo:(p?(p.activo||'1'):'1'),fechaBaja:(p?(p.fechaBaja||''):''),horarioMixto,permuta,diasAsistencia,multVacacion,permisoLactancia,ultimaEdicionPor,ultimaEdicionFecha};
     if(noEmpEdit){
       const idx=DB.personal.findIndex(x=>x.noEmp===noEmpEdit);
       if(idx>=0){rec.id=DB.personal[idx].id;DB.personal[idx]=rec;}
@@ -1311,6 +1350,8 @@ function renderPersonal(){
     if(diasAsis)badges+=' <span style="background:#F1F5F9;color:#475569;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="Asiste: '+serializarDiasAsistencia(diasAsis)+' — el resto se sombrea como descanso">📅 '+diasAsis.map(d=>DIA_ETIQUETA[d]||d).join('/')+'</span>';
     if(p.multVacacion==='2'||p.multVacacion==='3')badges+=' <span style="background:#DBEAFE;color:#1D4ED8;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="Vacaciones: 1 día tomado = '+p.multVacacion+' días de saldo (regla de '+(p.multVacacion==='2'?'Nocturno':'J. Acumulada')+')">🏖 ×'+p.multVacacion+'</span>';
     if(p.multVacacion==='mixto3')badges+=' <span style="background:#DBEAFE;color:#1D4ED8;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="Vacaciones: lunes a viernes ×1, sábado/domingo/festivo ×3">🏖 mixta</span>';
+    const pl=parsePermisoLactancia(p.permisoLactancia);
+    if(pl)badges+=' <span style="background:#FCE7F3;color:#BE185D;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="Permiso de lactancia — '+(pl.tipo==='salida'?'sale 1 hora antes':'llega 1 hora tarde')+' — vigente del '+pl.fIni+' al '+pl.fFin+'">🍼 '+(pl.tipo==='salida'?'sale temprano':'llega tarde')+' hasta '+pl.fFin.slice(8,10)+'/'+pl.fFin.slice(5,7)+'</span>';
     tr.innerHTML='<td class="tl"><span class="emp">'+p.noEmp+'</span></td>'
       +'<td class="tl"><span class="nom">'+p.nombre+badges+'</span></td>'
       +'<td class="tl"><span class="pst">'+p.puesto+'</span></td>'
@@ -1599,6 +1640,7 @@ function abrirModalVacacion(prefill){
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha inicio *</label><input id="vc-fi" type="date" class="fi" value="'+fPre+'"></div>'
     +'<div class="fr"><label class="fl">Fecha fin *</label><input id="vc-ff" type="date" class="fi" value="'+fPre+'"></div></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin-top:2px">Se registrará la incidencia <b>V (Vacaciones)</b> solo en los días hábiles del rango — los días de descanso de su turno se excluyen automáticamente. Para un solo día, deja la misma fecha en inicio y fin.</div>'
+    +'<div class="fr" style="margin-top:10px"><label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt2);cursor:pointer"><input type="checkbox" id="vc-incluir-descanso" style="width:14px;height:14px">Incluir días de descanso (para cambios de turno recientes, donde el patrón automático no aplica)</label></div>'
     +'<div class="fr" style="margin-top:10px"><label class="fl">Adelanto de antigüedad (opcional)</label><input id="vc-forzar-anios" type="number" min="1" max="40" class="fi" placeholder="Ej. 2"></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin-top:-6px">Solo si está tomando días de un período que <b>todavía no cumple</b> (p.ej. adelanta días de su segundo año antes de su aniversario). Pon el número de años de antigüedad que quieres aplicar para el cálculo de días correspondientes — déjalo vacío para el cálculo automático normal.</div>';
   abrirModal('🏖 Registrar vacaciones',html,()=>{
@@ -1608,8 +1650,9 @@ function abrirModalVacacion(prefill){
     if(fFin<fIni){toast('La fecha fin debe ser igual o posterior a la de inicio');return;}
     const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
     if(!p){toast('Empleado no encontrado');return;}
+    const incluirDescanso=document.getElementById('vc-incluir-descanso').checked;
     const rango=diasVacacionEnRango(p,fIni,fFin);
-    const fechas=rango.habiles;
+    const fechas=incluirDescanso?rango.todos:rango.habiles;
     if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+p.nombre+' — no se registró nada');return;}
     const conflictos=fechas.filter(f=>DB.incidencias.some(i=>i.noEmp===noEmp&&i.fecha===f&&i.incidencia&&i.incidencia!=='V'));
     const forzarEl=document.getElementById('vc-forzar-anios');
@@ -1626,7 +1669,7 @@ function abrirModalVacacion(prefill){
       guardarLocal();cerrarModal();renderVacaciones();
       if(TURNOS.includes(PAG))renderPag(PAG);
       if(batch.length)syncIncsBatch(batch);
-      const msgDescanso=rango.descanso.length?' (se excluyeron '+rango.descanso.length+' día'+(rango.descanso.length!==1?'s':'')+' de descanso)':'';
+      const msgDescanso=(!incluirDescanso&&rango.descanso.length)?' (se excluyeron '+rango.descanso.length+' día'+(rango.descanso.length!==1?'s':'')+' de descanso)':(incluirDescanso&&rango.descanso.length?' (incluye '+rango.descanso.length+' día'+(rango.descanso.length!==1?'s':'')+' que normalmente serían descanso)':'');
       const diasPesoReg=fechas.reduce((s,f)=>s+multiplicadorVacacionDia(p,f),0);
       const msgMult=diasPesoReg!==fechas.length?' · '+fechas.length+' día'+(fechas.length!==1?'s':'')+' marcado'+(fechas.length!==1?'s':'')+' = '+diasPesoReg+' días de saldo':'';
       const msgAdelanto=periodoVacTag?' · ⚠ etiquetado como adelanto del año '+periodoVacTag+' — se descontará de ese año aunque aún no cumpla el aniversario':'';
@@ -1653,6 +1696,7 @@ function abrirReimprimirSolicitud(){
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha inicio *</label><input id="vc-fi" type="date" class="fi"></div>'
     +'<div class="fr"><label class="fl">Fecha fin *</label><input id="vc-ff" type="date" class="fi"></div></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin-top:2px">Usa el mismo rango de fechas que ya se registró como vacación (revísalo en el calendario de arriba si no lo recuerdas). Esto <b>no vuelve a registrar nada</b> — solo genera el documento para imprimir.</div>'
+    +'<div class="fr" style="margin-top:10px"><label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt2);cursor:pointer"><input type="checkbox" id="vc-incluir-descanso" style="width:14px;height:14px">Incluir días de descanso (si así se registraron, por cambio de turno)</label></div>'
     +'<div class="fr" style="margin-top:10px"><label class="fl">Adelanto de antigüedad (opcional)</label><input id="vc-forzar-anios" type="number" min="1" max="40" class="fi" placeholder="Ej. 2"></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin-top:-6px">Solo si esos días fueron un adelanto de un período que aún no cumplía al momento de tomarlos — pon los años de antigüedad a aplicar. Déjalo vacío para el cálculo automático normal.</div>';
   abrirModal('🖨 Reimprimir solicitud de vacaciones',html,null,'',[
@@ -1901,8 +1945,10 @@ function imprimirSolicitudVacacion(){
   if(!p){toast('Empleado no encontrado');return;}
 
   const fEnd=new Date(fFin+'T12:00:00');
+  const incluirDescansoEl=document.getElementById('vc-incluir-descanso');
+  const incluirDescanso=incluirDescansoEl?incluirDescansoEl.checked:false;
   const rango=diasVacacionEnRango(p,fIni,fFin);
-  const fechas=rango.habiles;
+  const fechas=incluirDescanso?rango.todos:rango.habiles;
   if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+p.nombre+' — no hay nada que imprimir');return;}
 
   let per=periodoVacActual(p.fechaIngreso);
@@ -2425,7 +2471,7 @@ async function cargarDatos(){
     const str = v=>(v!==null&&v!==undefined)?String(v):'';
     const fecha = v=>v?String(v).substring(0,10):'';
     if(Array.isArray(data.personal)&&data.personal.length>0){
-      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja),horarioMixto:str(p.horarioMixto),permuta:str(p.permuta),diasAsistencia:str(p.diasAsistencia),multVacacion:str(p.multVacacion),pinPersonal:str(p.pinPersonal),ultimaEdicionPor:str(p.ultimaEdicionPor),ultimaEdicionFecha:fecha(p.ultimaEdicionFecha)}));
+      DB.personal=data.personal.map(p=>({id:str(p.id),noEmp:str(p.noEmp),nombre:str(p.nombre),turno:str(p.turno),puesto:str(p.puesto),fechaIngreso:fecha(p.fechaIngreso),tipo:str(p.tipo)||'base',finRotacion:fecha(p.finRotacion),activo:(str(p.activo)||'1'),fechaBaja:fecha(p.fechaBaja),horarioMixto:str(p.horarioMixto),permuta:str(p.permuta),diasAsistencia:str(p.diasAsistencia),multVacacion:str(p.multVacacion),pinPersonal:str(p.pinPersonal),ultimaEdicionPor:str(p.ultimaEdicionPor),ultimaEdicionFecha:fecha(p.ultimaEdicionFecha),permisoLactancia:str(p.permisoLactancia)}));
     }
     if(Array.isArray(data.incidencias)){
       DB.incidencias=data.incidencias.map(i=>({id:str(i.id),noEmp:str(i.noEmp),fecha:fecha(i.fecha),incidencia:str(i.incidencia),observacion:str(i.observacion),periodoVac:str(i.periodoVac),capturadoPor:str(i.capturadoPor)}));

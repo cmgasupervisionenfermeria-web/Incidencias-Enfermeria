@@ -866,8 +866,12 @@ function renderTurno(turno){
       const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===d.fecha)[0];
       const inc=io?io.incidencia:'';
       if(celdaBloqueada(p,turno,d.fecha)&&!inc){
-        const razon=!esDiaAplicable(p,turno,d.fecha)?p.nombre+' no tiene turno aquí este día':p.nombre+' — día de descanso';
-        celdas+='<td class="ic-na" title="'+razon+'"></td>';
+        const noAplica=!esDiaAplicable(p,turno,d.fecha);
+        if(noAplica){
+          celdas+='<td class="ic-na" title="'+p.nombre+' no tiene turno aquí este día"></td>';
+        } else {
+          celdas+='<td class="ic-na" style="cursor:pointer" title="'+p.nombre+' — día de descanso (solo Johana puede registrar aquí)" onclick="rPinJohana(()=>abrirPicker(\''+p.noEmp+'\',\''+d.fecha+'\',\''+turno+'\'))"></td>';
+        }
         return;
       }
       const cls=inc?clsInc(inc):'ic-vacio';
@@ -1650,7 +1654,6 @@ function abrirModalVacacion(prefill){
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha inicio *</label><input id="vc-fi" type="date" class="fi" value="'+fPre+'"></div>'
     +'<div class="fr"><label class="fl">Fecha fin *</label><input id="vc-ff" type="date" class="fi" value="'+fPre+'"></div></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin-top:2px">Se registrará la incidencia <b>V (Vacaciones)</b> solo en los días hábiles del rango — los días de descanso de su turno se excluyen automáticamente. Para un solo día, deja la misma fecha en inicio y fin.</div>'
-    +'<div class="fr" style="margin-top:10px"><label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt2);cursor:pointer"><input type="checkbox" id="vc-incluir-descanso" style="width:14px;height:14px">Incluir días de descanso (para cambios de turno recientes, donde el patrón automático no aplica)</label></div>'
     +'<div class="fr" style="margin-top:10px"><label class="fl">Adelanto de antigüedad (opcional)</label><input id="vc-forzar-anios" type="number" min="1" max="40" class="fi" placeholder="Ej. 2"></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin-top:-6px">Solo si está tomando días de un período que <b>todavía no cumple</b> (p.ej. adelanta días de su segundo año antes de su aniversario). Pon el número de años de antigüedad que quieres aplicar para el cálculo de días correspondientes — déjalo vacío para el cálculo automático normal.</div>';
   abrirModal('🏖 Registrar vacaciones',html,()=>{
@@ -1660,9 +1663,8 @@ function abrirModalVacacion(prefill){
     if(fFin<fIni){toast('La fecha fin debe ser igual o posterior a la de inicio');return;}
     const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
     if(!p){toast('Empleado no encontrado');return;}
-    const incluirDescanso=document.getElementById('vc-incluir-descanso').checked;
     const rango=diasVacacionEnRango(p,fIni,fFin);
-    const fechas=incluirDescanso?rango.todos:rango.habiles;
+    const fechas=rango.habiles;
     if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+p.nombre+' — no se registró nada');return;}
     const conflictos=fechas.filter(f=>DB.incidencias.some(i=>i.noEmp===noEmp&&i.fecha===f&&i.incidencia&&i.incidencia!=='V'));
     const forzarEl=document.getElementById('vc-forzar-anios');
@@ -1679,7 +1681,7 @@ function abrirModalVacacion(prefill){
       guardarLocal();cerrarModal();renderVacaciones();
       if(TURNOS.includes(PAG))renderPag(PAG);
       if(batch.length)syncIncsBatch(batch);
-      const msgDescanso=(!incluirDescanso&&rango.descanso.length)?' (se excluyeron '+rango.descanso.length+' día'+(rango.descanso.length!==1?'s':'')+' de descanso)':(incluirDescanso&&rango.descanso.length?' (incluye '+rango.descanso.length+' día'+(rango.descanso.length!==1?'s':'')+' que normalmente serían descanso)':'');
+      const msgDescanso=rango.descanso.length?' (se excluyeron '+rango.descanso.length+' día'+(rango.descanso.length!==1?'s':'')+' de descanso)':'';
       const diasPesoReg=fechas.reduce((s,f)=>s+multiplicadorVacacionDia(p,f),0);
       const msgMult=diasPesoReg!==fechas.length?' · '+fechas.length+' día'+(fechas.length!==1?'s':'')+' marcado'+(fechas.length!==1?'s':'')+' = '+diasPesoReg+' días de saldo':'';
       const msgAdelanto=periodoVacTag?' · ⚠ etiquetado como adelanto del año '+periodoVacTag+' — se descontará de ese año aunque aún no cumpla el aniversario':'';
@@ -1706,7 +1708,6 @@ function abrirReimprimirSolicitud(){
     +'<div class="fr2"><div class="fr"><label class="fl">Fecha inicio *</label><input id="vc-fi" type="date" class="fi"></div>'
     +'<div class="fr"><label class="fl">Fecha fin *</label><input id="vc-ff" type="date" class="fi"></div></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin-top:2px">Usa el mismo rango de fechas que ya se registró como vacación (revísalo en el calendario de arriba si no lo recuerdas). Esto <b>no vuelve a registrar nada</b> — solo genera el documento para imprimir.</div>'
-    +'<div class="fr" style="margin-top:10px"><label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt2);cursor:pointer"><input type="checkbox" id="vc-incluir-descanso" style="width:14px;height:14px">Incluir días de descanso (si así se registraron, por cambio de turno)</label></div>'
     +'<div class="fr" style="margin-top:10px"><label class="fl">Adelanto de antigüedad (opcional)</label><input id="vc-forzar-anios" type="number" min="1" max="40" class="fi" placeholder="Ej. 2"></div>'
     +'<div style="font-size:10px;color:var(--txt3);margin-top:-6px">Solo si esos días fueron un adelanto de un período que aún no cumplía al momento de tomarlos — pon los años de antigüedad a aplicar. Déjalo vacío para el cálculo automático normal.</div>';
   abrirModal('🖨 Reimprimir solicitud de vacaciones',html,null,'',[
@@ -1955,10 +1956,8 @@ function imprimirSolicitudVacacion(){
   if(!p){toast('Empleado no encontrado');return;}
 
   const fEnd=new Date(fFin+'T12:00:00');
-  const incluirDescansoEl=document.getElementById('vc-incluir-descanso');
-  const incluirDescanso=incluirDescansoEl?incluirDescansoEl.checked:false;
   const rango=diasVacacionEnRango(p,fIni,fFin);
-  const fechas=incluirDescanso?rango.todos:rango.habiles;
+  const fechas=rango.habiles;
   if(!fechas.length){toast('⚠ Ese rango solo incluye días de descanso de '+p.nombre+' — no hay nada que imprimir');return;}
 
   let per=periodoVacActual(p.fechaIngreso);

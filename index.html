@@ -1132,8 +1132,9 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     +'<option value=""'+(!p||!p.multVacacion?' selected':'')+'>Normal de su turno (×1, o el que le toque por turno)</option>'
     +'<option value="2"'+(p&&p.multVacacion==='2'?' selected':'')+'>Como Nocturno — 1 día tomado = 2 días de saldo</option>'
     +'<option value="3"'+(p&&p.multVacacion==='3'?' selected':'')+'>Como J. Acumulada — 1 día tomado = 3 días de saldo</option>'
+    +'<option value="mixto3"'+(p&&p.multVacacion==='mixto3'?' selected':'')+'>Mixta — lunes a viernes ×1, sábado/domingo/festivo ×3 (como J. Acumulada)</option>'
     +'</select></div>'
-    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Solo para casos como Supervisoras que en realidad cubren guardias de 12 o 14 horas — hace que su cálculo de vacaciones siga esa regla aunque su turno base sea otro.</div>'
+    +'<div style="font-size:10px;color:var(--txt3);margin:-6px 0 12px">Solo para casos como Supervisoras que en realidad cubren guardias de 12 o 14 horas — hace que su cálculo de vacaciones siga esa regla aunque su turno base sea otro. La opción "Mixta" evalúa cada día de vacación por separado según qué día de la semana cayó, para quien tiene cambio de turno entre semana normal y guardias de fin de semana/festivo.</div>'
     +(p&&p.ultimaEdicionPor?'<div style="font-size:10px;color:var(--txt3);background:var(--bg2);border-radius:6px;padding:6px 10px;margin-bottom:12px">🕐 Última edición: <b>'+p.ultimaEdicionPor+'</b>'+(p.ultimaEdicionFecha?' — '+p.ultimaEdicionFecha:'')+'</div>':'');
   const extra=[];
   if(p){
@@ -1309,6 +1310,7 @@ function renderPersonal(){
     const diasAsis=parseDiasAsistencia(p.diasAsistencia);
     if(diasAsis)badges+=' <span style="background:#F1F5F9;color:#475569;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="Asiste: '+serializarDiasAsistencia(diasAsis)+' — el resto se sombrea como descanso">📅 '+diasAsis.map(d=>DIA_ETIQUETA[d]||d).join('/')+'</span>';
     if(p.multVacacion==='2'||p.multVacacion==='3')badges+=' <span style="background:#DBEAFE;color:#1D4ED8;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="Vacaciones: 1 día tomado = '+p.multVacacion+' días de saldo (regla de '+(p.multVacacion==='2'?'Nocturno':'J. Acumulada')+')">🏖 ×'+p.multVacacion+'</span>';
+    if(p.multVacacion==='mixto3')badges+=' <span style="background:#DBEAFE;color:#1D4ED8;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700" title="Vacaciones: lunes a viernes ×1, sábado/domingo/festivo ×3">🏖 mixta</span>';
     tr.innerHTML='<td class="tl"><span class="emp">'+p.noEmp+'</span></td>'
       +'<td class="tl"><span class="nom">'+p.nombre+badges+'</span></td>'
       +'<td class="tl"><span class="pst">'+p.puesto+'</span></td>'
@@ -1499,7 +1501,7 @@ function calcVencimientos(umbralDias){
   DB.personal.filter(p=>p.tipo!=='pasante'&&p.turno!=='eventual'&&p.activo!=='0').forEach(p=>{
     const per=periodoVacActual(p.fechaIngreso);
     if(!per||!per.ingresoValido||per.anioServicio<1||!per.fin)return;
-    const tomados=diasVacacionTomadosEnPeriodo(p.noEmp,per)*multiplicadorVacacion(p);
+    const tomados=diasVacacionTomadosEnPeriodo(p.noEmp,per).dias;
     const saldo=per.dias-tomados;
     if(saldo<=0)return; // ya agotó su derecho, no hay riesgo de vencimiento
     const diasRestantes=Math.ceil((per.fin-hoy)/86400000);
@@ -1625,8 +1627,8 @@ function abrirModalVacacion(prefill){
       if(TURNOS.includes(PAG))renderPag(PAG);
       if(batch.length)syncIncsBatch(batch);
       const msgDescanso=rango.descanso.length?' (se excluyeron '+rango.descanso.length+' día'+(rango.descanso.length!==1?'s':'')+' de descanso)':'';
-      const multReg=multiplicadorVacacion(p);
-      const msgMult=multReg>1?' · '+fechas.length+' guardia'+(fechas.length!==1?'s':'')+' = '+(fechas.length*multReg)+' días de saldo':'';
+      const diasPesoReg=fechas.reduce((s,f)=>s+multiplicadorVacacionDia(p,f),0);
+      const msgMult=diasPesoReg!==fechas.length?' · '+fechas.length+' día'+(fechas.length!==1?'s':'')+' marcado'+(fechas.length!==1?'s':'')+' = '+diasPesoReg+' días de saldo':'';
       const msgAdelanto=periodoVacTag?' · ⚠ etiquetado como adelanto del año '+periodoVacTag+' — se descontará de ese año aunque aún no cumpla el aniversario':'';
       toast('✓ Vacaciones registradas: '+fechas.length+' día'+(fechas.length!==1?'s':'')+' — '+(p?p.nombre:noEmp)+msgDescanso+msgMult+msgAdelanto);
     };
@@ -1816,10 +1818,31 @@ function diasVacXAntiguedad(anioServicio){
 // (p.ej. cubren guardias de 12 o 14 hrs aunque su turno base sea
 // Supervisoras) — se guarda en p.multVacacion como '2' o '3' y
 // tiene prioridad sobre la regla general de su turno.
+// Otras personas tienen una regla MIXTA por horario mixto real
+// (p.ej. entre semana cubren turno normal, fin de semana/festivo
+// cubren guardia de Jornada) — p.multVacacion='mixto3' hace que
+// CADA día de vacación se evalúe por separado según qué día de la
+// semana cayó, en vez de un multiplicador fijo para toda la persona.
 // ══════════════════════════════════════════════════════════
 const MULT_VACACION_TURNO={noct:2,ja:3};
+// Multiplicador para UN día específico (fechaStr) de esta persona.
+function multiplicadorVacacionDia(p,fechaStr){
+  if(!p)return 1;
+  if(p.multVacacion==='mixto3'){
+    const day=new Date(fechaStr+'T12:00:00').getDay(); // 0=Dom...6=Sáb
+    const esFinSemanaOFestivo=(day===0||day===6)||esDiaFestivoOficialMX(fechaStr);
+    return esFinSemanaOFestivo?3:1;
+  }
+  const ov=parseInt(p.multVacacion,10);
+  if(ov===2||ov===3)return ov;
+  return MULT_VACACION_TURNO[p.turno]||1;
+}
+// Multiplicador "general" de la persona (para mostrar un solo número) —
+// no aplica a la regla mixta, que varía día a día; ahí no hay un solo
+// número que la represente.
 function multiplicadorVacacion(p){
   if(!p)return 1;
+  if(p.multVacacion==='mixto3')return null;
   const ov=parseInt(p.multVacacion,10);
   if(ov===2||ov===3)return ov;
   return MULT_VACACION_TURNO[p.turno]||1;
@@ -1832,20 +1855,26 @@ function normalizarAnio(anioTxt){
   const pivote=(new Date().getFullYear()%100)+1; // años futuros cercanos -> siglo XXI; lejanos -> siglo XX
   return yy<=pivote?2000+yy:1900+yy;
 }
-// Cuenta cuántas "guardias" de V ya se tomaron contra un período específico.
-// Un día V normal cuenta por su fecha (dentro de per.inicio–per.fin). Un día
-// V etiquetado como adelanto (i.periodoVac) cuenta contra el año que se le
-// asignó al registrarlo, SIN IMPORTAR su fecha calendario — así el saldo
-// queda correcto tanto antes como después de que pase el aniversario.
+// Cuenta cuántos días de V ya se tomaron contra un período específico, y
+// a cuántos días de saldo equivalen (aplicando el multiplicador de CADA
+// día individualmente — soporta tanto un multiplicador fijo como la
+// regla mixta día por día). Un día V etiquetado como adelanto
+// (i.periodoVac) cuenta contra el año que se le asignó al registrarlo,
+// SIN IMPORTAR su fecha calendario — así el saldo queda correcto tanto
+// antes como después de que pase el aniversario.
 function diasVacacionTomadosEnPeriodo(noEmp,per,excluirFechas){
   excluirFechas=excluirFechas||[];
-  return DB.incidencias.filter(i=>{
+  const p=DB.personal.find(x=>x.noEmp===noEmp);
+  const marcados=DB.incidencias.filter(i=>{
     if(i.noEmp!==noEmp||i.incidencia!=='V')return false;
     if(excluirFechas.indexOf(i.fecha)!==-1)return false;
     if(i.periodoVac)return String(i.periodoVac)===String(per.anioServicio);
     const d=new Date(i.fecha+'T12:00:00');
     return d>=per.inicio&&d<per.fin;
-  }).length;
+  });
+  const guardias=marcados.length;
+  const dias=marcados.reduce((s,i)=>s+multiplicadorVacacionDia(p,i.fecha),0);
+  return{guardias,dias};
 }
 function periodoVacActual(fechaIngresoStr){
   const f=parseFechaIngreso(fechaIngresoStr);
@@ -1896,10 +1925,11 @@ function imprimirSolicitudVacacion(){
   let diasCorr=0, tomadosPrevios=0, guardiasPrevias=0;
   if(per&&per.ingresoValido&&per.anioServicio>=1){
     diasCorr=per.dias;
-    guardiasPrevias=diasVacacionTomadosEnPeriodo(noEmp,per,fechas);
-    tomadosPrevios=guardiasPrevias*mult;
+    const prev=diasVacacionTomadosEnPeriodo(noEmp,per,fechas);
+    guardiasPrevias=prev.guardias;
+    tomadosPrevios=prev.dias;
   }
-  const diasSolicitud=fechas.length*mult;
+  const diasSolicitud=fechas.reduce((s,f)=>s+multiplicadorVacacionDia(p,f),0);
   const restantesAntes = diasCorr ? (diasCorr - tomadosPrevios) : 0;
   const restantesDespues = diasCorr ? (restantesAntes - diasSolicitud) : 0;
 
@@ -1944,10 +1974,10 @@ function imprimirSolicitudVacacion(){
     +stat(antiguedadTxt.split(' ')[0],'Antigüedad')
     +stat(diasCorr||'—','Corresponden')
     +stat(tomadosPrevios,'Gozados antes')
-    +stat(diasSolicitud,mult>1?'Esta sol. ('+fechas.length+' g.×'+mult+')':'Esta solicitud')
+    +stat(diasSolicitud,(diasSolicitud!==fechas.length)?'Esta sol. ('+fechas.length+' día'+(fechas.length!==1?'s':'')+' marc.)':'Esta solicitud')
     +stat(restantesDespues,'Saldo restante',restantesDespues<=0)
     +'</div>'
-    +'<div class="banner"><div class="rng">🏖 '+fmt(fIni)+' → '+fmt(fFin)+' · '+diasRestTxt+'</div><div class="sub">Reanuda labores el '+fmt(reanudaStr)+(mult>1?' · '+fechas.length+' guardia'+(fechas.length!==1?'s':'')+' = '+diasSolicitud+' días de saldo ('+TLBL[p.turno]+', ×'+mult+')':'')+(esAdelanto?' · ⚠ Adelanto de antigüedad ('+per.anioServicio+' años aplicados manualmente)':'')+'</div></div>'
+    +'<div class="banner"><div class="rng">🏖 '+fmt(fIni)+' → '+fmt(fFin)+' · '+diasRestTxt+'</div><div class="sub">Reanuda labores el '+fmt(reanudaStr)+((diasSolicitud!==fechas.length)?' · '+fechas.length+' día'+(fechas.length!==1?'s':'')+' marcado'+(fechas.length!==1?'s':'')+' = '+diasSolicitud+' días de saldo'+(mult>1?' ('+TLBL[p.turno]+', ×'+mult+')':' (regla mixta por día)'):'')+(esAdelanto?' · ⚠ Adelanto de antigüedad ('+per.anioServicio+' años aplicados manualmente)':'')+'</div></div>'
     +'<div class="desc">Días de descanso fijos<div class="chips">'
     +['L','M','M','J','V','S','D'].map((d,idx)=>'<span class="chip-d'+(patronDesc&&patronDesc[idx]?' on':'')+'">'+d+'</span>').join('')
     +'</div><small>'+notaDesc+'</small></div>'
@@ -2043,10 +2073,8 @@ function renderSaldoVac(){
     }
     const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
     const finStr=fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate());
-    const guardias=diasVacacionTomadosEnPeriodo(p.noEmp,per);
-    const mult=multiplicadorVacacion(p);
-    const tomados=guardias*mult;
-    const tomadosTxt = mult>1 ? tomados+' <span style="color:var(--txt3);font-size:9px">('+guardias+' guardia'+(guardias!==1?'s':'')+' ×'+mult+')</span>' : String(tomados);
+    const {guardias,dias:tomados}=diasVacacionTomadosEnPeriodo(p.noEmp,per);
+    const tomadosTxt = (guardias!==tomados) ? tomados+' <span style="color:var(--txt3);font-size:9px">('+guardias+' día'+(guardias!==1?'s':'')+' marcado'+(guardias!==1?'s':'')+')</span>' : String(tomados);
     const saldo=per.dias-tomados;
     const colorSaldo=saldo<=0?'var(--rojo)':(saldo<=per.dias*0.25?'var(--naranja)':'#15803D');
     const diasVence=Math.ceil((per.fin-hoy)/86400000);
@@ -2075,8 +2103,7 @@ function expCSVSaldoVac(){
   pers.forEach(p=>{
     const per=periodoVacActual(p.fechaIngreso);
     if(!per||!per.ingresoValido||per.anioServicio<1){csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+',N/A,,,,,\n';return;}
-    const guardias=diasVacacionTomadosEnPeriodo(p.noEmp,per);
-    const tomados=guardias*multiplicadorVacacion(p);
+    const {guardias,dias:tomados}=diasVacacionTomadosEnPeriodo(p.noEmp,per);
     const iniStr=fStr(per.inicio.getFullYear(),per.inicio.getMonth(),per.inicio.getDate());
     const finStr=fStr(per.fin.getFullYear(),per.fin.getMonth(),per.fin.getDate());
     const saldo=per.dias-tomados;

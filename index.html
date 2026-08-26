@@ -487,7 +487,9 @@ async function syncInc(noEmp,fecha,inc,obs,capturadoPor) {
   apiCall({action:'saveIncidencia', noEmp:noEmp, fecha:fecha, incidencia:inc||'', observacion:obs||'', capturadoPor:capturadoPor||''});
 }
 async function syncPersonal(rec) {
-  guardarLocal(); apiCall({action:'savePersonal', record:JSON.stringify(rec)});
+  guardarLocal();
+  const r=await apiCall({action:'savePersonal', record:JSON.stringify(rec)});
+  if(r&&r.error==='DUPLICADO_NOEMP')toast('🚨 '+r.mensaje+' — este cambio NO se guardó en la nube. Corrige el No. de Empleado y vuelve a guardar.',7000);
 }
 async function syncDeletePersonal(noEmp) {
   apiCall({action:'deletePersonal', noEmp:noEmp});
@@ -1175,6 +1177,7 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
   if(p){
     if(esBaja) extra.push({lbl:'↩️ Reactivar',cls:'btn-ghost',fn:()=>reactivarPersonal(noEmpEdit)});
     else extra.push({lbl:'🚫 Dar de baja',cls:'btn-ghost',fn:()=>darDeBajaPersonal(noEmpEdit)});
+    extra.push({lbl:'🔁 Cambiar No. Empleado',cls:'btn-ghost',fn:()=>abrirCambiarNoEmp(noEmpEdit)});
     extra.push({lbl:'Eliminar todo',cls:'btn-danger',fn:()=>elimPersonal(noEmpEdit)});
   }
   abrirModal(p?(esBaja?'Editar empleado (de baja)':'Editar empleado'):'Nuevo empleado',html,()=>{
@@ -1183,6 +1186,7 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     const turno=document.getElementById('ftu').value;
     if(!noEmp&&turno==='eventual'&&!noEmpEdit)noEmp=generarNoEmpEventual();
     if(!noEmp||!nombre){toast('Completa los campos obligatorios');return;}
+    if(!/[a-z0-9]/i.test(noEmp)){toast('⚠ El No. de Empleado no puede ser solo un punto o símbolo — usa un número real, o deja vacío en Tipo=Eventual para autogenerarlo');return;}
     const puesto=document.getElementById('fpu').value.trim();
     const fechaIngreso=document.getElementById('fi').value.trim();
     const tipo=document.getElementById('ft').value;
@@ -1242,6 +1246,57 @@ function reactivarPersonal(noEmp){
   const idx=DB.personal.findIndex(x=>x.noEmp===noEmp);
   if(idx>=0)DB.personal[idx]=rec;
   guardarLocal();cerrarModal();toast('↩️ '+p.nombre+' reactivado');renderPag(PAG);syncPersonal(rec);
+}
+// Corregir un No. de Empleado mal capturado (vacío, ".", o compartido por
+// error entre dos personas) — es la llave que conecta a cada quien con
+// sus incidencias, así que un error aquí mezcla los datos de varias
+// personas sin que se note a simple vista.
+function abrirCambiarNoEmp(noEmpActual){
+  const p=DB.personal.find(x=>x.noEmp===noEmpActual);
+  if(!p){toast('Empleado no encontrado');return;}
+  const compartidoCon=DB.personal.filter(x=>x.noEmp===noEmpActual);
+  const compartido=compartidoCon.length>1;
+  const html='<div class="fr"><label class="fl">No. de Empleado actual</label><input class="fi" value="'+noEmpActual+'" disabled></div>'
+    +'<div class="fr"><label class="fl">Nuevo No. de Empleado *</label><input id="cne-nuevo" class="fi" placeholder="Ej. 350"></div>'
+    +(compartido
+      ? '<div style="font-size:11px;color:var(--rojo);background:#FEE2E2;border-radius:6px;padding:8px 10px;margin-top:6px">⚠ Este número ("'+noEmpActual+'") lo comparten <b>'+compartidoCon.length+' personas</b> ('+compartidoCon.map(x=>x.nombre).join(', ')+') — sus incidencias están mezcladas entre sí y no se pueden separar automáticamente. Este cambio solo actualiza el número de <b>'+p.nombre+'</b>; sus incidencias recientes bajo el número compartido NO se mueven — tendrás que revisarlas y volver a capturarlas para cada quien.</div>'
+      : '<div style="font-size:10px;color:var(--txt3);margin-top:6px">Esto también actualizará automáticamente todas sus incidencias, tiempo extra, eventuales y notas ya registradas bajo el número anterior.</div>');
+  abrirModal('🔁 Cambiar No. de Empleado — '+p.nombre,html,()=>{
+    const nuevo=document.getElementById('cne-nuevo').value.trim();
+    if(!nuevo||!/[a-z0-9]/i.test(nuevo)){toast('⚠ Escribe un número de empleado válido');return;}
+    if(nuevo===noEmpActual){toast('Ese ya es su número actual');return;}
+    if(DB.personal.some(x=>x.noEmp===nuevo)){toast('⚠ Ya existe otra persona con ese número');return;}
+    cambiarNoEmpPersonal(noEmpActual,nuevo,!compartido);
+  },'Cambiar',compartido?[{lbl:'🗑 Limpiar incidencias mezcladas de "'+noEmpActual+'"',cls:'btn-danger',fn:()=>limpiarIncidenciasCompartidas(noEmpActual)}]:[]);
+}
+function limpiarIncidenciasCompartidas(noEmpCompartido){
+  const n=DB.incidencias.filter(i=>i.noEmp===noEmpCompartido).length;
+  if(!n){toast('No hay incidencias registradas bajo ese número');return;}
+  if(!confirm('¿Borrar las '+n+' incidencias mezcladas bajo el número "'+noEmpCompartido+'"? No se puede deshacer, y después tendrás que volver a capturarlas correctamente para cada persona con su número ya corregido.'))return;
+  const fechas=DB.incidencias.filter(i=>i.noEmp===noEmpCompartido).map(i=>i.fecha);
+  DB.incidencias=DB.incidencias.filter(i=>i.noEmp!==noEmpCompartido);
+  guardarLocal();cerrarModal();renderPag(PAG);
+  fechas.forEach(f=>apiCall({action:'saveIncidencia',noEmp:noEmpCompartido,fecha:f,incidencia:'',observacion:''}));
+  toast('🗑 Se borraron '+n+' incidencias mezcladas del número "'+noEmpCompartido+'"',6000);
+}
+function cambiarNoEmpPersonal(anterior,nuevo,cascada){
+  const idx=DB.personal.findIndex(x=>x.noEmp===anterior);
+  if(idx<0)return;
+  const hoy=new Date();
+  const rec=Object.assign({},DB.personal[idx],{noEmp:nuevo,ultimaEdicionPor:USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'Sin identificar',ultimaEdicionFecha:fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate())});
+  DB.personal[idx]=rec;
+  if(cascada){
+    DB.incidencias.forEach(i=>{if(i.noEmp===anterior)i.noEmp=nuevo;});
+    DB.textra.forEach(t=>{if(t.noEmp===anterior)t.noEmp=nuevo;});
+    DB.eventual.forEach(e=>{if(e.noEmp===anterior)e.noEmp=nuevo;});
+    DB.notas.forEach(n=>{if(n.noEmp===anterior)n.noEmp=nuevo;});
+  }
+  guardarLocal();cerrarModal();renderPag(PAG);
+  syncPersonal(rec);
+  if(cascada)apiCall({action:'renameNoEmp',anterior:anterior,nuevo:nuevo});
+  toast(cascada
+    ? '✓ Número actualizado: '+anterior+' → '+nuevo+' (incidencias, tiempo extra, eventuales y notas también se actualizaron)'
+    : '✓ Número actualizado: '+anterior+' → '+nuevo+' — revisa y vuelve a capturar sus incidencias recientes del número compartido', 6000);
 }
 function elimPersonal(noEmp){
   const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
@@ -2508,3 +2563,4 @@ setInterval(()=>{ if(SYNC_QUEUE.length) reintentarSync(true); }, 45000);
 </script>
 </body>
 </html>
+

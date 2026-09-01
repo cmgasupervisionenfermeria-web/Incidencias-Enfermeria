@@ -812,12 +812,40 @@ function calcAlertas(turno,mes,anio){
   });
   return al;
 }
+// Fechas exactas detrás de una alerta de M (movimientos) o Ps/Pe (pases) —
+// para mostrarlas al hacer clic en la alerta.
+function fechasAlertaEnMes(noEmp,turno,mes,anio,tipo){
+  const p=DB.personal.find(x=>x.noEmp===noEmp);
+  return DB.incidencias.filter(i=>{
+    if(i.noEmp!==noEmp)return false;
+    const d=new Date(i.fecha+'T12:00:00');
+    if(d.getMonth()!==mes||d.getFullYear()!==anio)return false;
+    if(p&&!esDiaAplicable(p,turno,i.fecha))return false;
+    return tipo==='M'?i.incidencia==='M':(i.incidencia==='Ps'||i.incidencia==='Pe');
+  }).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+}
+function abrirDesgloseAlerta(noEmp,turno,mes,anio,tipo){
+  const p=DB.personal.find(x=>x.noEmp===noEmp);
+  const nombre=p?p.nombre:noEmp;
+  const fechas=fechasAlertaEnMes(noEmp,turno,mes,anio,tipo);
+  const filas=fechas.map(i=>{
+    const dow=DIA_LARGO_ES[new Date(i.fecha+'T12:00:00').getDay()];
+    const fechaFmt=i.fecha.split('-').reverse().join('/');
+    return '<tr><td class="tl">'+fechaFmt+'</td><td class="tl">'+dow+'</td><td class="tl"><b>'+i.incidencia+'</b></td><td class="tl" style="color:var(--txt3)">'+(i.observacion||'')+'</td></tr>';
+  }).join('');
+  const tituloTipo=tipo==='M'?'Movimientos (M)':'Pases de entrada/salida (Ps/Pe)';
+  const html=fechas.length
+    ? '<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">'+MESES[mes]+' '+anio+' · '+(TLBL[turno]||turno)+'</div>'
+      +'<div class="wrap"><table class="tbl"><thead><tr><th class="tl">Fecha</th><th class="tl">Día</th><th class="tl">Tipo</th><th class="tl">Observación</th></tr></thead><tbody>'+filas+'</tbody></table></div>'
+    : '<div class="empty">Sin registros encontrados</div>';
+  abrirModal('⚠️ '+tituloTipo+' — '+nombre,html,null,'');
+}
 function renderAlertas(turno){
   const {mes,anio}=Q, al=calcAlertas(turno,mes,anio);
   const el=document.getElementById('al-'+turno); if(!el)return;
   if(!al.length){el.innerHTML='';return;}
   el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⚠️ Alertas del período</div>'
-    +al.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+'</div>').join('')+'</div>';
+    +al.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'" style="cursor:pointer" title="Clic para ver las fechas" onclick="abrirDesgloseAlerta(\''+a.noEmp+'\',\''+turno+'\','+mes+','+anio+',\''+a.tipo+'\')">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+'</div>').join('')+'</div>';
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1554,7 +1582,7 @@ function renderResumen(){
   if(alEl){
     alEl.innerHTML = alT.length
       ? '<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⚠️ Alertas del mes en curso</div>'
-        +alT.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+' <span style="color:var(--txt3)">('+TLBL[a.turno]+')</span></div>').join('')+'</div>'
+        +alT.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'" style="cursor:pointer" title="Clic para ver las fechas" onclick="abrirDesgloseAlerta(\''+a.noEmp+'\',\''+a.turno+'\','+hoy.getMonth()+','+hoy.getFullYear()+',\''+a.tipo+'\')">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+' <span style="color:var(--txt3)">('+TLBL[a.turno]+')</span></div>').join('')+'</div>'
       : '<div class="empty">Sin alertas de movimientos/pases este mes</div>';
   }
   renderAniversarios();
@@ -1877,9 +1905,9 @@ function renderConc(){
   const mes=parseInt(document.getElementById('c-mes').value),anio=parseInt(document.getElementById('c-anio').value),ft=document.getElementById('c-turno').value;
   if(!DB.personal.length){document.getElementById('conc-body').innerHTML='<div class="empty">Sin datos</div>';return;}
   const alT=[];
-  TURNOS.forEach(t=>{if(!ft||ft===t)alT.push(...calcAlertas(t,mes,anio));});
+  TURNOS.forEach(t=>{if(!ft||ft===t)alT.push(...calcAlertas(t,mes,anio).map(a=>Object.assign({turno:t},a)));});
   const alEl=document.getElementById('conc-al');
-  alEl.innerHTML=alT.length?'<div class="ap">'+alT.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+'</div>').join('')+'</div>':'';
+  alEl.innerHTML=alT.length?'<div class="ap">'+alT.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'" style="cursor:pointer" title="Clic para ver las fechas" onclick="abrirDesgloseAlerta(\''+a.noEmp+'\',\''+a.turno+'\','+mes+','+anio+',\''+a.tipo+'\')">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+'</div>').join('')+'</div>':'';
   const pers=DB.personal.filter(p=>!ft||perteneceATurnoEnMes(p,ft,mes,anio)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   const tipos=['F','R','I','V','M','B','Ps','Pe','LC','L','F4H','F8H'];
   let html='<div class="card"><div class="wrap"><table class="tbl"><thead><tr><th class="tl">No.Emp</th><th class="tl" style="min-width:150px">Nombre</th><th class="tl">Turno</th>';
@@ -2563,4 +2591,3 @@ setInterval(()=>{ if(SYNC_QUEUE.length) reintentarSync(true); }, 45000);
 </script>
 </body>
 </html>
-

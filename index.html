@@ -140,11 +140,11 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <button class="nav-tab" onclick="showPage('ja',this)">📅 J. Acumulada</button>
   <button class="nav-tab" onclick="showPage('eventual',this)">🔄 Eventual</button>
   <button class="nav-tab" onclick="showPage('vacaciones',this)">🏖 Vacaciones</button>
-  <button class="nav-tab" onclick="showPage('concentrado',this)">📊 Concentrado</button>
   <button class="nav-tab" onclick="showPage('saldovac',this)">💰 Saldo Vac.</button>
   <button class="nav-tab" onclick="showPage('historial',this)">📈 Historial Anual</button>
   <button class="nav-tab" onclick="showPage('personal',this)">👥 Personal</button>
   <button class="nav-tab" onclick="showPage('textra',this)">⏱ T. Extra</button>
+  <button class="nav-tab" onclick="showPage('concentrado',this)">📊 Concentrado</button>
   <div class="nav-right">
     <div class="nav-search" style="position:relative">
       <input id="buscadorI" type="text" placeholder="🔍 Buscar empleado o No. Emp" oninput="buscarEmpleado(this.value)" onkeydown="if(event.key==='Enter')buscarEnterEmpleado()">
@@ -286,13 +286,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 <!-- CONCENTRADO -->
 <div class="page" id="page-concentrado">
   <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-    <div><div class="sec-t">📊 Concentrado Mensual</div><div class="sec-s">Resumen por persona y turno</div></div>
+    <div><div class="sec-t">📊 Concentrado Mensual</div><div class="sec-s">Indicadores por turno</div></div>
     <select id="c-mes" class="fi" style="width:130px" onchange="renderConc()"><option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option><option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option><option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option><option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option></select>
     <select id="c-anio" class="fi" style="width:80px" onchange="renderConc()"><option value="2025">2025</option><option value="2026">2026</option><option value="2027">2027</option></select>
     <select id="c-turno" class="fi" style="width:140px" onchange="renderConc()"><option value="">Todos</option><option value="tmat">Matutino</option><option value="vesp">Vespertino</option><option value="noct">Nocturno</option><option value="sup">Supervisoras</option><option value="ja">J. Acumulada</option></select>
     <button class="btn btn-ghost" onclick="expCSVConc()">↓ CSV</button>
   </div>
   <div id="conc-al" style="margin-bottom:10px"></div>
+  <div id="conc-indicadores" style="margin-bottom:14px"></div>
   <div id="conc-body"><div class="empty">Selecciona mes y año</div></div>
 </div>
 
@@ -1901,31 +1902,120 @@ document.addEventListener('click',e=>{
 // ══════════════════════════════════════════════════════════
 // CONCENTRADO
 // ══════════════════════════════════════════════════════════
+// Estadísticas de un mes completo para UNA persona en UN turno — mismo
+// criterio que ya corregimos en Resumen (celdaBloqueada define qué días
+// realmente aplican, salvo excepciones ya marcadas).
+function statsPersonaMes(p,turno,mes,anio){
+  const ultimoDia=new Date(anio,mes+1,0).getDate();
+  let aplicables=0,asist=0,faltas=0,retardos=0,mov=0,pases=0;
+  for(let d=1;d<=ultimoDia;d++){
+    const fecha=fStr(anio,mes,d);
+    if(!esDiaAplicable(p,turno,fecha))continue;
+    const io=DB.incidencias.find(i=>i.noEmp===p.noEmp&&i.fecha===fecha);
+    if(celdaBloqueada(p,turno,fecha)&&!io)continue;
+    aplicables++;
+    const c=io?io.incidencia:'';
+    if(c==='A')asist++;
+    else if(c==='F')faltas++;
+    else if(c==='R')retardos++;
+    else if(c==='M')mov++;
+    else if(c==='Ps'||c==='Pe')pases++;
+  }
+  return {aplicables,asist,faltas,retardos,mov,pases};
+}
+function calcIndicadoresTurno(turno,mes,anio){
+  const pers=DB.personal.filter(p=>perteneceATurnoEnMes(p,turno,mes,anio)&&p.activo!=='0');
+  const tot={aplicables:0,asist:0,faltas:0,retardos:0,mov:0,pases:0};
+  pers.forEach(p=>{
+    const s=statsPersonaMes(p,turno,mes,anio);
+    tot.aplicables+=s.aplicables;tot.asist+=s.asist;tot.faltas+=s.faltas;
+    tot.retardos+=s.retardos;tot.mov+=s.mov;tot.pases+=s.pases;
+  });
+  const cumplidos=tot.asist+tot.mov+tot.pases;
+  const presentes=tot.asist+tot.retardos;
+  const horasExtra=DB.textra.filter(t=>{
+    if((t.turnoCubierto||t.turno)!==turno)return false;
+    const d=new Date(t.fecha+'T12:00:00');
+    return d.getMonth()===mes&&d.getFullYear()===anio;
+  }).reduce((s,t)=>s+(parseFloat(t.horas)||0),0);
+  return{
+    turno,personas:pers.length,
+    aplicables:tot.aplicables,faltas:tot.faltas,horasExtra,
+    pctAsist:tot.aplicables?Math.round(tot.asist/tot.aplicables*1000)/10:0,
+    pctAusent:tot.aplicables?Math.round(tot.faltas/tot.aplicables*1000)/10:0,
+    pctPuntualidad:presentes?Math.round(tot.asist/presentes*1000)/10:100,
+    pctCumplimiento:tot.aplicables?Math.round(cumplidos/tot.aplicables*1000)/10:0
+  };
+}
+// Cobertura de Personal Eventual en el mes — no está organizada por turno
+// (se captura por área), así que se resume aparte del comparativo de turnos.
+function statsEventualMes(mes,anio){
+  const items=DB.eventual.filter(e=>{
+    const d=new Date(e.fecha+'T12:00:00');
+    return d.getMonth()===mes&&d.getFullYear()===anio;
+  });
+  const personasUnicas=new Set(items.map(e=>(e.noEmp&&e.noEmp!=='')?'n:'+e.noEmp:'x:'+(e.nombre||'').trim().toUpperCase())).size;
+  const porTipo={};
+  items.forEach(e=>{const t=e.incidenciaCubierta&&e.incidenciaCubierta.trim()?e.incidenciaCubierta.trim():'Sin especificar';porTipo[t]=(porTipo[t]||0)+1;});
+  return{total:items.length,personasUnicas,porTipo};
+}
+function renderIndicadoresConc(mes,anio){
+  const el=document.getElementById('conc-indicadores');
+  if(!el)return;
+  const filas=TURNOS.map(t=>calcIndicadoresTurno(t,mes,anio));
+  const gTot={aplicables:0,faltas:0,asist:0,mov:0,pases:0,retardos:0,personas:0,horasExtra:0};
+  TURNOS.forEach(t=>{
+    const pers=DB.personal.filter(p=>perteneceATurnoEnMes(p,t,mes,anio)&&p.activo!=='0');
+    gTot.personas+=pers.length;
+    pers.forEach(p=>{const s=statsPersonaMes(p,t,mes,anio);gTot.aplicables+=s.aplicables;gTot.faltas+=s.faltas;gTot.asist+=s.asist;gTot.mov+=s.mov;gTot.pases+=s.pases;gTot.retardos+=s.retardos;});
+  });
+  filas.forEach(f=>gTot.horasExtra+=f.horasExtra);
+  const gPresentes=gTot.asist+gTot.retardos;
+  const gCumplidos=gTot.asist+gTot.mov+gTot.pases;
+  const gral={turno:'__gral',personas:gTot.personas,aplicables:gTot.aplicables,faltas:gTot.faltas,horasExtra:gTot.horasExtra,
+    pctAsist:gTot.aplicables?Math.round(gTot.asist/gTot.aplicables*1000)/10:0,
+    pctAusent:gTot.aplicables?Math.round(gTot.faltas/gTot.aplicables*1000)/10:0,
+    pctPuntualidad:gPresentes?Math.round(gTot.asist/gPresentes*1000)/10:100,
+    pctCumplimiento:gTot.aplicables?Math.round(gCumplidos/gTot.aplicables*1000)/10:0};
+  const fila=(f,esGral)=>{
+    const colorAusent=f.pctAusent<3?'#15803D':'var(--rojo)';
+    const colorCumpl=f.pctCumplimiento>=100?'#15803D':(f.pctCumplimiento>=90?'var(--naranja)':'var(--rojo)');
+    return '<tr'+(esGral?' style="background:var(--bg2);font-weight:700"':'')+'><td class="tl">'+(esGral?'TOTAL GENERAL':TICO[f.turno]+' '+TLBL[f.turno])+'</td>'
+      +'<td style="text-align:center">'+f.personas+'</td>'
+      +'<td style="text-align:center">'+f.aplicables+'</td>'
+      +'<td style="text-align:center;font-weight:700;color:#1D4ED8">'+f.pctAsist+'%</td>'
+      +'<td style="text-align:center;font-weight:700;color:'+colorAusent+'">'+f.pctAusent+'% <span style="font-weight:400;font-size:9px;color:var(--txt3)">('+f.faltas+')</span></td>'
+      +'<td style="text-align:center;font-weight:700">'+f.pctPuntualidad+'%</td>'
+      +'<td style="text-align:center;font-weight:700;color:'+colorCumpl+'">'+f.pctCumplimiento+'%</td>'
+      +'<td style="text-align:center;font-weight:700;color:var(--az)">'+(f.horasExtra||0)+' h</td></tr>';
+  };
+  const ev=statsEventualMes(mes,anio);
+  const chipsTipo=Object.keys(ev.porTipo).sort((a,b)=>ev.porTipo[b]-ev.porTipo[a])
+    .map(t=>'<span class="tbadge" style="margin-right:4px">'+t+': '+ev.porTipo[t]+'</span>').join('');
+  el.innerHTML='<div class="card"><div class="card-header"><span class="card-title">📈 Indicadores del mes</span></div>'
+    +'<div class="wrap"><table class="tbl"><thead><tr><th class="tl">Turno</th><th>Personas</th><th>Días aplic.</th>'
+    +'<th>% Asistencia</th><th>% Ausentismo<br><span style="font-weight:400;font-size:9px;color:var(--txt3)">meta &lt;3%</span></th>'
+    +'<th>% Puntualidad</th><th>Cumplimiento plantilla<br><span style="font-weight:400;font-size:9px;color:var(--txt3)">meta 100%</span></th>'
+    +'<th>Horas extra</th></tr></thead><tbody>'
+    +filas.map(f=>fila(f,false)).join('')+fila(gral,true)+'</tbody></table></div>'
+    +'<div style="font-size:9px;color:var(--txt3);padding:8px 14px">% Asistencia y % Ausentismo se calculan sobre los días que realmente le tocaban a cada quien (se excluyen sus días de descanso). % Puntualidad = asistencias sin retardo ÷ (asistencias + retardos). Cumplimiento de plantilla = (asistencias + movimientos + pases) ÷ días aplicables. Horas extra = suma de tiempo extra cubierto en ese turno.</div>'
+    +'</div>'
+    +'<div class="card" style="margin-top:10px"><div class="card-header"><span class="card-title">🔄 Cobertura de Personal Eventual</span></div>'
+    +'<div style="padding:12px 14px;display:flex;gap:24px;flex-wrap:wrap;align-items:center">'
+    +'<div class="dash-stat"><b style="color:var(--az)">'+ev.total+'</b>Coberturas</div>'
+    +'<div class="dash-stat"><b style="color:#15803D">'+ev.personasUnicas+'</b>Personas eventuales distintas</div>'
+    +(chipsTipo?'<div style="font-size:10px;color:var(--txt3)">Por tipo cubierto: '+chipsTipo+'</div>':'<div style="font-size:10px;color:var(--txt3)">Sin coberturas registradas este mes</div>')
+    +'</div></div>';
+}
 function renderConc(){
   const mes=parseInt(document.getElementById('c-mes').value),anio=parseInt(document.getElementById('c-anio').value),ft=document.getElementById('c-turno').value;
-  if(!DB.personal.length){document.getElementById('conc-body').innerHTML='<div class="empty">Sin datos</div>';return;}
+  if(!DB.personal.length){document.getElementById('conc-body').innerHTML='<div class="empty">Sin datos</div>';const ind=document.getElementById('conc-indicadores');if(ind)ind.innerHTML='';return;}
+  renderIndicadoresConc(mes,anio);
   const alT=[];
   TURNOS.forEach(t=>{if(!ft||ft===t)alT.push(...calcAlertas(t,mes,anio).map(a=>Object.assign({turno:t},a)));});
   const alEl=document.getElementById('conc-al');
   alEl.innerHTML=alT.length?'<div class="ap">'+alT.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'" style="cursor:pointer" title="Clic para ver las fechas" onclick="abrirDesgloseAlerta(\''+a.noEmp+'\',\''+a.turno+'\','+mes+','+anio+',\''+a.tipo+'\')">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+'</div>').join('')+'</div>':'';
-  const pers=DB.personal.filter(p=>!ft||perteneceATurnoEnMes(p,ft,mes,anio)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
-  const tipos=['F','R','I','V','M','B','Ps','Pe','LC','L','F4H','F8H'];
-  let html='<div class="card"><div class="wrap"><table class="tbl"><thead><tr><th class="tl">No.Emp</th><th class="tl" style="min-width:150px">Nombre</th><th class="tl">Turno</th>';
-  tipos.forEach(t=>html+='<th>'+t+'</th>');
-  html+='<th>Total</th></tr></thead><tbody>';
-  pers.forEach(p=>{
-    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getMonth()===mes&&d.getFullYear()===anio&&(!ft||esDiaAplicable(p,ft,i.fecha));});
-    const cnt={};tipos.forEach(t=>cnt[t]=0);
-    inc.forEach(i=>{if(cnt[i.incidencia]!==undefined)cnt[i.incidencia]++;});
-    const tot=Object.values(cnt).reduce((s,v)=>s+v,0);
-    if(p.activo==='0'&&!tot)return;
-    const rc=cnt['Ps']>=2?'alerta-ps':cnt['M']>=4?'alerta-row':'';
-    html+='<tr class="'+rc+'"><td class="tl"><span class="emp">'+p.noEmp+'</span></td><td class="tl"><span class="nom">'+p.nombre+'</span></td><td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td>';
-    tipos.forEach(t=>{const v=cnt[t];let s=v>0?'font-weight:700;':'color:var(--txt3);';if(t==='M'&&v>=4)s='font-weight:700;color:var(--naranja);';if(t==='Ps'&&v>=2)s='font-weight:700;color:var(--rojo);';html+='<td style="text-align:center;'+s+'">'+(v||'–')+'</td>';});
-    html+='<td style="text-align:center;font-weight:700;color:var(--az)">'+tot+'</td></tr>';
-  });
-  html+='</tbody></table></div></div>';
-  document.getElementById('conc-body').innerHTML=html;
+  document.getElementById('conc-body').innerHTML='';
 }
 
 // ══════════════════════════════════════════════════════════

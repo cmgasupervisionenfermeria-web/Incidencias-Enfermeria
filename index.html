@@ -2035,10 +2035,20 @@ function ingresoISO(p){
 }
 function esCamillero(p){return (p.puesto||'').toLowerCase().indexOf('camillero')!==-1;}
 // grupo: 'enf' = personal de enfermería, 'cam' = camilleros, sin grupo = todos
-function enPlantillaBase(p,turno,grupo){return p.turno===turno&&p.tipo!=='pasante'&&(!grupo||(grupo==='cam')===esCamillero(p));}
-function plantillaEnFecha(turno,fechaStr,grupo){
+function _grupoOK(p,grupo){return p.tipo!=='pasante'&&(!grupo||(grupo==='cam')===esCamillero(p));}
+// ¿Esta persona ocupa una plaza en alguno de estos turnos? Quien tiene horario
+// mixto (p. ej. Misael: Jornada sáb/dom y Nocturno miércoles) cubre guardias en
+// varios turnos y cuenta en CADA uno; si se piden varios turnos a la vez, se
+// cuenta una sola vez.
+function _cubreAlguno(p,turnos){
+  if(turnos.indexOf(p.turno)!==-1)return true;
+  const hm=parseHorarioMixto(p.horarioMixto);
+  return !!hm&&turnos.some(t=>!!hm[t]);
+}
+function plantillaEnFecha(turnos,fechaStr,grupo){
+  if(!Array.isArray(turnos))turnos=[turnos];
   return DB.personal.filter(p=>{
-    if(!enPlantillaBase(p,turno,grupo))return false;
+    if(!_grupoOK(p,grupo)||!_cubreAlguno(p,turnos))return false;
     const ing=ingresoISO(p);
     if(ing&&ing>fechaStr)return false;
     if(p.activo==='0'&&(!p.fechaBaja||p.fechaBaja<=fechaStr))return false;
@@ -2046,23 +2056,22 @@ function plantillaEnFecha(turno,fechaStr,grupo){
   }).length;
 }
 function _diaAntes(s){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()-1);return fStr(d.getFullYear(),d.getMonth(),d.getDate());}
-function statsRotacion(turno,mes,anio,grupo){
+// turnos: arreglo de turnos (uno para la fila, todos para el total). Altas y bajas
+// se cuentan en el turno BASE de la persona para no duplicarlas.
+function statsRotacion(turnos,mes,anio,grupo){
+  if(!Array.isArray(turnos))turnos=[turnos];
   const hoy=new Date();
   if(anio*12+mes>hoy.getFullYear()*12+hoy.getMonth())return null;
   const finMes=new Date(anio,mes+1,0),fd=finMes>hoy?hoy:finMes;
   const finStr=fStr(fd.getFullYear(),fd.getMonth(),fd.getDate());
   const iniMes=fStr(anio,mes,1),iniAnio=fStr(anio,0,1);
-  const bajasDesde=d=>DB.personal.filter(p=>enPlantillaBase(p,turno,grupo)&&p.activo==='0'&&p.fechaBaja&&p.fechaBaja>=d&&p.fechaBaja<=finStr).length;
-  const altas=DB.personal.filter(p=>{if(!enPlantillaBase(p,turno,grupo))return false;const i=ingresoISO(p);return i&&i>=iniMes&&i<=finStr;}).length;
-  const fin=plantillaEnFecha(turno,finStr,grupo);
+  const base=p=>_grupoOK(p,grupo)&&turnos.indexOf(p.turno)!==-1;
+  const bajasDesde=d=>DB.personal.filter(p=>base(p)&&p.activo==='0'&&p.fechaBaja&&p.fechaBaja>=d&&p.fechaBaja<=finStr).length;
+  const altas=DB.personal.filter(p=>{if(!base(p))return false;const i=ingresoISO(p);return i&&i>=iniMes&&i<=finStr;}).length;
+  const fin=plantillaEnFecha(turnos,finStr,grupo);
   return{altas,bajasMes:bajasDesde(iniMes),bajasAnio:bajasDesde(iniAnio),fin,
-    promMes:(plantillaEnFecha(turno,_diaAntes(iniMes),grupo)+fin)/2,
-    promAnio:(plantillaEnFecha(turno,_diaAntes(iniAnio),grupo)+fin)/2};
-}
-function sumarRot(lista){
-  const t={altas:0,bajasMes:0,bajasAnio:0,fin:0,promMes:0,promAnio:0};
-  lista.forEach(r=>Object.keys(t).forEach(k=>t[k]+=r[k]));
-  return t;
+    promMes:(plantillaEnFecha(turnos,_diaAntes(iniMes),grupo)+fin)/2,
+    promAnio:(plantillaEnFecha(turnos,_diaAntes(iniAnio),grupo)+fin)/2};
 }
 // La plantilla autorizada se guarda por turno Y grupo. Enfermería usa el
 // id del turno (compatible con lo ya capturado); Camilleros usa «turno_cam».
@@ -2229,8 +2238,8 @@ function renderIndicadoresConc(mes,anio){
     const hoyISO=new Date().toISOString().slice(0,10);
     const theadD='<th class="tl">Turno</th>'+th('Plazas autorizadas')+th('Plantilla real','al cierre')+th('Vacantes')+th('Altas','del mes')+th('Bajas','del mes')+th('Rotación mensual','bajas ÷ plantilla prom.')+th('Bajas','en el año')+th('Rotación acumulada','año a la fecha');
     const bloquePlantilla=(grupo,titulo,turnosG)=>{
-      const rots=turnosG.map(t=>statsRotacion(t,mes,anio,grupo));
-      const rotTot=rots.every(r=>r)?sumarRot(rots):null;
+      const rots=turnosG.map(t=>statsRotacion([t],mes,anio,grupo));
+      const rotTot=statsRotacion(turnosG,mes,anio,grupo);
       const autor=turnosG.map(t=>autorizadaTurno(t,grupo));
       const capturadas=autor.filter(a=>a!==null);
       const filaD=(lbl,esGral,aut,real,r)=>{
@@ -2243,9 +2252,10 @@ function renderIndicadoresConc(mes,anio){
           +td(r?r.altas:'—')+td(r?r.bajasMes:'—')+td(rotMes===null?'—':'<b>'+rotMes+'%</b>')
           +td(r?r.bajasAnio:'—')+td(rotAnio===null?'—':'<b>'+rotAnio+'%</b>')+'</tr>';
       };
-      const reales=turnosG.map((t,i)=>rots[i]?rots[i].fin:plantillaEnFecha(t,hoyISO,grupo));
+      const reales=turnosG.map((t,i)=>rots[i]?rots[i].fin:plantillaEnFecha([t],hoyISO,grupo));
+      const realTot=reales.reduce((a,n)=>a+n,0); // suma de plazas, comparable con las autorizadas
       let body=turnosG.map((t,i)=>filaD(TICO[t]+' '+TLBL[t],false,autor[i],reales[i],rots[i])).join('');
-      body+=filaD('TOTAL '+(grupo==='cam'?'CAMILLEROS':'ENFERMERÍA'),true,capturadas.length?capturadas.reduce((s,a)=>s+a,0):null,reales.reduce((s,n)=>s+n,0),rotTot);
+      body+=filaD('TOTAL '+(grupo==='cam'?'CAMILLEROS':'ENFERMERÍA'),true,capturadas.length?capturadas.reduce((s,a)=>s+a,0):null,realTot,rotTot);
       return {titulo,body,sinAutorizadas:!capturadas.length};
     };
     const bEnf=bloquePlantilla('enf','Personal de enfermería',TURNOS);
@@ -2256,7 +2266,7 @@ function renderIndicadoresConc(mes,anio){
       theadD,
       subT('🩺 '+bEnf.titulo)+bEnf.body+subT('🛏 '+bCam.titulo)+bCam.body,
       ((bEnf.sinAutorizadas&&bCam.sinAutorizadas)?'<b>Aún no hay plazas autorizadas capturadas</b> — usa el botón «Plantilla autorizada» (solo Johana) para calcular las vacantes. ':'')
-      +'Camilleros = personal cuyo puesto dice «camillero»; el resto cuenta como personal de enfermería. Plantilla real: personal base activo del turno (sin pasantes ni eventuales). Rotación = bajas ÷ plantilla promedio del periodo (plantilla al inicio y al cierre). Altas/bajas salen de las fechas de ingreso y de baja del catálogo de Personal.',
+      +'Camilleros = personal cuyo puesto dice «camillero»; el resto cuenta como personal de enfermería. Plantilla real: personal base activo del turno (sin pasantes ni eventuales); quien cubre guardias en varios turnos por horario mixto (p. ej. Misael) cuenta en cada turno donde trabaja ; el total de plantilla real suma las plazas de cada turno (comparable con las autorizadas), mientras que la rotación total cuenta a cada persona una sola vez. Rotación = bajas ÷ plantilla promedio del periodo (plantilla al inicio y al cierre). Altas/bajas salen de las fechas de ingreso y de baja del catálogo de Personal.',
       btnPlantilla);
 
     // 5) Vacaciones pendientes

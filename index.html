@@ -416,7 +416,7 @@ INCS.forEach(i=>IMAP[i.c]=i);
 let Q = (()=>{const h=new Date(),d=h.getDate();return{mes:h.getMonth(),anio:h.getFullYear(),q:d>=11&&d<=25?1:2}})();
 let PAG = 'resumen', pinCB=null, filtP='';
 let SEL=[], MULTI=false;
-let DB = {personal:[],incidencias:[],eventual:[],textra:[],notas:[]};
+let DB = {personal:[],incidencias:[],eventual:[],textra:[],notas:[],plantilla:[]};
 let NID = 1;
 let SYNC_QUEUE = [];
 const SYNC_KEY = 'inc_cmga_syncqueue';
@@ -504,6 +504,9 @@ async function syncTextra(rec) {
   guardarLocal(); apiCall({action:'saveTextra', record:JSON.stringify(rec)});
 }
 async function syncDeleteTextra(id) { apiCall({action:'deleteTextra', id:id}); }
+async function syncPlantilla(rec) {
+  guardarLocal(); apiCall({action:'savePlantilla', record:JSON.stringify(rec)});
+}
 async function syncNota(noEmp,nota) {
   guardarLocal(); apiCall({action:'saveNota', noEmp:noEmp, nota:nota||''});
 }
@@ -1903,50 +1906,96 @@ document.addEventListener('click',e=>{
 // ══════════════════════════════════════════════════════════
 // CONCENTRADO
 // ══════════════════════════════════════════════════════════
-// Estadísticas de un mes completo para UNA persona en UN turno — mismo
-// criterio que ya corregimos en Resumen (celdaBloqueada define qué días
-// realmente aplican, salvo excepciones ya marcadas).
+// ──────────────────────────────────────────────────────────
+// Horas que dura una guardia en cada turno — se usa para convertir días
+// aplicables en "horas programadas". Ajusta aquí si cambian los horarios.
+// Horarios: Matutino 07:00-14:30 (7.5 h), Vespertino 14:00-21:00 (7 h), Nocturno 20:30-07:30 (11 h),
+// Jornada 07:00-21:00 (14 h). Supervisoras: sin horario indicado, se usa 8 h.
+const HORAS_GUARDIA={tmat:7.5,vesp:7,noct:11,sup:8,ja:14};
+// Supervisoras: cada una trabaja el horario de otro turno, así que las horas
+// se toman por persona (y por día, en el caso de Fanny).
+function horasPersonaDia(p,turno,fechaStr){
+  if(turno!=='sup')return HORAS_GUARDIA[turno];
+  const n=(p.nombre||'').toUpperCase();
+  if(n.indexOf('JOHANA')!==-1)return 7.5;                       // Matutino
+  if(n.indexOf('FANNY')!==-1)return new Date(fechaStr+'T12:00:00').getDay()===6?11:7; // Vespertino; sábado Nocturno
+  if(n.indexOf('FERNANDO')!==-1)return 14;                      // Jornada
+  if(n.indexOf('MERARI')!==-1||n.indexOf('JOQUEBED')!==-1)return 11; // Nocturno
+  if(n.indexOf('NORMA')!==-1)return 11;                         // Nocturno
+  return HORAS_GUARDIA.sup;
+}
+// Último día del mes que ya "cuenta" para los indicadores: meses pasados =
+// todo el mes; mes en curso = hasta AYER (hoy aún puede estar sin capturar);
+// meses futuros = 0. Así los días que todavía no ocurren no inflan el
+// denominador y no bajan artificialmente los porcentajes.
+function ultimoDiaContable(mes,anio){
+  const hoy=new Date(),fin=new Date(anio,mes+1,0).getDate();
+  const m0=anio*12+mes,h0=hoy.getFullYear()*12+hoy.getMonth();
+  if(m0<h0)return fin;
+  if(m0>h0)return 0;
+  return Math.min(fin,hoy.getDate()-1);
+}
+let _IDX_INC=null;
+function construirIdxInc(){
+  _IDX_INC=new Map();
+  DB.incidencias.forEach(i=>_IDX_INC.set(i.noEmp+'|'+i.fecha,i));
+}
+function buscarIncIdx(noEmp,fecha){
+  return _IDX_INC?_IDX_INC.get(noEmp+'|'+fecha):DB.incidencias.find(i=>i.noEmp===noEmp&&i.fecha===fecha);
+}
+// Estadísticas de un mes para UNA persona en UN turno — mismo criterio que
+// Resumen (celdaBloqueada define qué días realmente aplican, salvo excepciones).
 function statsPersonaMes(p,turno,mes,anio){
-  const ultimoDia=new Date(anio,mes+1,0).getDate();
-  let aplicables=0,asist=0,faltas=0,retardos=0,mov=0,pases=0;
-  for(let d=1;d<=ultimoDia;d++){
+  const corte=ultimoDiaContable(mes,anio);
+  let aplicables=0,asist=0,faltas=0,retardos=0,mov=0,pases=0,incap=0,permisos=0,vac=0,horas=0;
+  for(let d=1;d<=corte;d++){
     const fecha=fStr(anio,mes,d);
     if(!esDiaAplicable(p,turno,fecha))continue;
-    const io=DB.incidencias.find(i=>i.noEmp===p.noEmp&&i.fecha===fecha);
+    const io=buscarIncIdx(p.noEmp,fecha);
     if(celdaBloqueada(p,turno,fecha)&&!io)continue;
     aplicables++;
+    horas+=horasPersonaDia(p,turno,fecha);
     const c=io?io.incidencia:'';
     if(c==='A')asist++;
     else if(c==='F')faltas++;
     else if(c==='R')retardos++;
     else if(c==='M')mov++;
     else if(c==='Ps'||c==='Pe')pases++;
+    else if(c==='I')incap++;
+    else if(c==='LC'||c==='L')permisos++;
+    else if(c==='V')vac++;
   }
-  return {aplicables,asist,faltas,retardos,mov,pases};
+  return {aplicables,asist,faltas,retardos,mov,pases,incap,permisos,vac,horas};
+}
+const _pc=(n,d)=>d?Math.round(n/d*1000)/10:null;
+function armarInd(turno,personas,t,horasExtra,teReg,horasProg){
+  const ap=t.aplicables,presentes=t.asist+t.retardos;
+  return{turno,personas,aplicables:ap,
+    asist:t.asist,faltas:t.faltas,retardos:t.retardos,mov:t.mov,pases:t.pases,incap:t.incap,permisos:t.permisos,vac:t.vac,
+    huecos:t.faltas+t.incap+t.permisos+t.vac,
+    horasExtra,teReg,horasProg,
+    pctAsist:_pc(t.asist,ap),pctAusent:_pc(t.faltas,ap),pctIncap:_pc(t.incap,ap),pctPerm:_pc(t.permisos,ap),
+    pctPuntualidad:presentes?_pc(t.asist,presentes):(ap?100:null),
+    pctCumplimiento:_pc(t.asist+t.mov+t.pases,ap),
+    pctHE:horasProg?Math.round(horasExtra/horasProg*1000)/10:null};
 }
 function calcIndicadoresTurno(turno,mes,anio){
   const pers=DB.personal.filter(p=>perteneceATurnoEnMes(p,turno,mes,anio)&&p.activo!=='0');
-  const tot={aplicables:0,asist:0,faltas:0,retardos:0,mov:0,pases:0};
-  pers.forEach(p=>{
-    const s=statsPersonaMes(p,turno,mes,anio);
-    tot.aplicables+=s.aplicables;tot.asist+=s.asist;tot.faltas+=s.faltas;
-    tot.retardos+=s.retardos;tot.mov+=s.mov;tot.pases+=s.pases;
-  });
-  const cumplidos=tot.asist+tot.mov+tot.pases;
-  const presentes=tot.asist+tot.retardos;
-  const horasExtra=DB.textra.filter(t=>{
-    if((t.turnoCubierto||t.turno)!==turno)return false;
-    const d=new Date(t.fecha+'T12:00:00');
+  const t={aplicables:0,asist:0,faltas:0,retardos:0,mov:0,pases:0,incap:0,permisos:0,vac:0,horas:0};
+  pers.forEach(p=>{const s=statsPersonaMes(p,turno,mes,anio);Object.keys(t).forEach(k=>t[k]+=s[k]);});
+  const te=DB.textra.filter(x=>{
+    if((x.turnoCubierto||x.turno)!==turno)return false;
+    const d=new Date(x.fecha+'T12:00:00');
     return d.getMonth()===mes&&d.getFullYear()===anio;
-  }).reduce((s,t)=>s+(parseFloat(t.horas)||0),0);
-  return{
-    turno,personas:pers.length,
-    aplicables:tot.aplicables,faltas:tot.faltas,horasExtra,
-    pctAsist:tot.aplicables?Math.round(tot.asist/tot.aplicables*1000)/10:0,
-    pctAusent:tot.aplicables?Math.round(tot.faltas/tot.aplicables*1000)/10:0,
-    pctPuntualidad:presentes?Math.round(tot.asist/presentes*1000)/10:100,
-    pctCumplimiento:tot.aplicables?Math.round(cumplidos/tot.aplicables*1000)/10:0
-  };
+  });
+  const horasExtra=Math.round(te.reduce((s,x)=>s+(parseFloat(x.horas)||0),0)*10)/10;
+  return armarInd(turno,pers.length,t,horasExtra,te.length,t.horas);
+}
+function sumarInd(filas){
+  const t={aplicables:0,asist:0,faltas:0,retardos:0,mov:0,pases:0,incap:0,permisos:0,vac:0,horas:0};
+  let personas=0,he=0,te=0,hp=0;
+  filas.forEach(f=>{Object.keys(t).forEach(k=>t[k]+=f[k]);personas+=f.personas;he+=f.horasExtra;te+=f.teReg;hp+=f.horasProg;});
+  return armarInd('__gral',personas,t,Math.round(he*10)/10,te,hp);
 }
 // Cobertura de Personal Eventual en el mes — no está organizada por turno
 // (se captura por área), así que se resume aparte del comparativo de turnos.
@@ -1960,53 +2009,253 @@ function statsEventualMes(mes,anio){
   items.forEach(e=>{const t=e.incidenciaCubierta&&e.incidenciaCubierta.trim()?e.incidenciaCubierta.trim():'Sin especificar';porTipo[t]=(porTipo[t]||0)+1;});
   return{total:items.length,personasUnicas,porTipo};
 }
+// Reincidencia: personas (solo el NÚMERO, sin nombres) con 3 o más faltas/retardos
+// en los últimos 3 meses terminando en el mes elegido (hasta el último día cerrado).
+function reincidentesPorTurno(mes,anio){
+  const hoy=new Date();
+  if(anio*12+mes>hoy.getFullYear()*12+hoy.getMonth())return null;
+  const corte=ultimoDiaContable(mes,anio);
+  const fd=new Date(anio,mes,corte);
+  const finStr=fStr(fd.getFullYear(),fd.getMonth(),fd.getDate());
+  const ini=new Date(anio,mes-2,1),iniStr=fStr(ini.getFullYear(),ini.getMonth(),1);
+  const cnt={};
+  DB.incidencias.forEach(i=>{if((i.incidencia==='F'||i.incidencia==='R')&&i.fecha>=iniStr&&i.fecha<=finStr)cnt[i.noEmp]=(cnt[i.noEmp]||0)+1;});
+  const res={};TURNOS.forEach(t=>res[t]=0);
+  DB.personal.forEach(p=>{
+    if(p.activo==='0'||p.tipo==='pasante'||res[p.turno]===undefined)return;
+    if((cnt[p.noEmp]||0)>=3)res[p.turno]++;
+  });
+  return res;
+}
+// ── Plantilla, vacantes y rotación ──
+function ingresoISO(p){
+  const f=parseFechaIngreso(p.fechaIngreso);
+  if(!f||!f.anioTxt)return'';
+  return fStr(normalizarAnio(f.anioTxt),f.mes,f.dia);
+}
+function enPlantillaBase(p,turno){return p.turno===turno&&p.tipo!=='pasante';}
+function plantillaEnFecha(turno,fechaStr){
+  return DB.personal.filter(p=>{
+    if(!enPlantillaBase(p,turno))return false;
+    const ing=ingresoISO(p);
+    if(ing&&ing>fechaStr)return false;
+    if(p.activo==='0'&&(!p.fechaBaja||p.fechaBaja<=fechaStr))return false;
+    return true;
+  }).length;
+}
+function _diaAntes(s){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()-1);return fStr(d.getFullYear(),d.getMonth(),d.getDate());}
+function statsRotacion(turno,mes,anio){
+  const hoy=new Date();
+  if(anio*12+mes>hoy.getFullYear()*12+hoy.getMonth())return null;
+  const finMes=new Date(anio,mes+1,0),fd=finMes>hoy?hoy:finMes;
+  const finStr=fStr(fd.getFullYear(),fd.getMonth(),fd.getDate());
+  const iniMes=fStr(anio,mes,1),iniAnio=fStr(anio,0,1);
+  const bajasDesde=d=>DB.personal.filter(p=>enPlantillaBase(p,turno)&&p.activo==='0'&&p.fechaBaja&&p.fechaBaja>=d&&p.fechaBaja<=finStr).length;
+  const altas=DB.personal.filter(p=>{if(!enPlantillaBase(p,turno))return false;const i=ingresoISO(p);return i&&i>=iniMes&&i<=finStr;}).length;
+  const fin=plantillaEnFecha(turno,finStr);
+  return{altas,bajasMes:bajasDesde(iniMes),bajasAnio:bajasDesde(iniAnio),fin,
+    promMes:(plantillaEnFecha(turno,_diaAntes(iniMes))+fin)/2,
+    promAnio:(plantillaEnFecha(turno,_diaAntes(iniAnio))+fin)/2};
+}
+function sumarRot(lista){
+  const t={altas:0,bajasMes:0,bajasAnio:0,fin:0,promMes:0,promAnio:0};
+  lista.forEach(r=>Object.keys(t).forEach(k=>t[k]+=r[k]));
+  return t;
+}
+function autorizadaTurno(turno){
+  const r=(DB.plantilla||[]).find(x=>x.turno===turno);
+  if(!r||r.autorizada===''||r.autorizada===null||r.autorizada===undefined)return null;
+  const n=parseInt(r.autorizada);
+  return isNaN(n)?null:n;
+}
+function abrirPlantillaAutorizada(){
+  const html='<div style="font-size:11px;color:var(--txt2);margin-bottom:10px">Número de plazas AUTORIZADAS por turno (sin contar pasantes ni eventuales). Con esto el Concentrado calcula las vacantes. Deja en blanco el turno que no quieras medir.</div>'
+    +TURNOS.map(t=>{const a=autorizadaTurno(t);return '<div class="fr"><label class="fl">'+TICO[t]+' '+TLBL[t]+'</label><input id="pa-'+t+'" class="fi" type="number" min="0" step="1" value="'+(a===null?'':a)+'" placeholder="Plazas autorizadas"></div>';}).join('');
+  abrirModal('⚙ Plantilla autorizada por turno',html,()=>{
+    if(!DB.plantilla)DB.plantilla=[];
+    const hoyISO=new Date().toISOString().slice(0,10);
+    const quien=USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'';
+    TURNOS.forEach(t=>{
+      const raw=document.getElementById('pa-'+t).value.trim();
+      const nuevo=raw===''?'':String(Math.max(0,parseInt(raw)||0));
+      const ant=autorizadaTurno(t);
+      if((ant===null?'':String(ant))===nuevo)return;
+      const rec={id:t,turno:t,autorizada:nuevo,ultimaEdicionPor:quien,ultimaEdicionFecha:hoyISO};
+      const i=DB.plantilla.findIndex(x=>x.turno===t);
+      if(i>=0)DB.plantilla[i]=rec;else DB.plantilla.push(rec);
+      syncPlantilla(rec);
+    });
+    guardarLocal();cerrarModal();renderConc();toast('✓ Plantilla autorizada guardada');
+  },'Guardar');
+}
+// ── Vacaciones pendientes (al día de hoy) ──
+function statsVacTurno(turno){
+  const hoy=new Date();hoy.setHours(0,0,0,0);
+  const r={conDerecho:0,derecho:0,tomados:0,saldo:0,conSaldo:0,enRiesgo:0};
+  DB.personal.forEach(p=>{
+    if(p.turno!==turno||p.activo==='0'||p.tipo==='pasante')return;
+    const per=periodoVacActual(p.fechaIngreso);
+    if(!per||!per.ingresoValido||per.anioServicio<1)return;
+    const tom=diasVacacionTomadosEnPeriodo(p.noEmp,per).dias;
+    const saldo=per.dias-tom;
+    r.conDerecho++;r.derecho+=per.dias;r.tomados+=tom;
+    if(saldo>0){
+      r.conSaldo++;r.saldo+=saldo;
+      const diasVence=Math.ceil((per.fin-hoy)/86400000);
+      if(saldo>=per.dias*0.5&&diasVence<=90)r.enRiesgo++;
+    }
+  });
+  return r;
+}
+function _mesPrev(mes,anio){return mes===0?{mes:11,anio:anio-1}:{mes:mes-1,anio};}
+// Flecha de tendencia contra el mes anterior. mejorSube=true: subir es bueno.
+function flechaTend(act,ant,mejorSube,unidad){
+  if(act===null||act===undefined||ant===null||ant===undefined)return'';
+  const d=Math.round((act-ant)*10)/10;
+  if(d===0)return'<div class="tend" style="color:var(--txt3)">＝ igual que mes ant.</div>';
+  const bueno=((d>0)===mejorSube);
+  return'<div class="tend" style="color:'+(bueno?'#15803D':'var(--rojo)')+'">'+(d>0?'▲':'▼')+' '+Math.abs(d)+(unidad||'')+'</div>';
+}
+const _pf=v=>(v===null||v===undefined)?'—':v+'%';
 function renderIndicadoresConc(mes,anio){
   const el=document.getElementById('conc-indicadores');
   if(!el)return;
-  const filas=TURNOS.map(t=>calcIndicadoresTurno(t,mes,anio));
-  const gTot={aplicables:0,faltas:0,asist:0,mov:0,pases:0,retardos:0,personas:0,horasExtra:0};
-  TURNOS.forEach(t=>{
-    const pers=DB.personal.filter(p=>perteneceATurnoEnMes(p,t,mes,anio)&&p.activo!=='0');
-    gTot.personas+=pers.length;
-    pers.forEach(p=>{const s=statsPersonaMes(p,t,mes,anio);gTot.aplicables+=s.aplicables;gTot.faltas+=s.faltas;gTot.asist+=s.asist;gTot.mov+=s.mov;gTot.pases+=s.pases;gTot.retardos+=s.retardos;});
-  });
-  filas.forEach(f=>gTot.horasExtra+=f.horasExtra);
-  const gPresentes=gTot.asist+gTot.retardos;
-  const gCumplidos=gTot.asist+gTot.mov+gTot.pases;
-  const gral={turno:'__gral',personas:gTot.personas,aplicables:gTot.aplicables,faltas:gTot.faltas,horasExtra:gTot.horasExtra,
-    pctAsist:gTot.aplicables?Math.round(gTot.asist/gTot.aplicables*1000)/10:0,
-    pctAusent:gTot.aplicables?Math.round(gTot.faltas/gTot.aplicables*1000)/10:0,
-    pctPuntualidad:gPresentes?Math.round(gTot.asist/gPresentes*1000)/10:100,
-    pctCumplimiento:gTot.aplicables?Math.round(gCumplidos/gTot.aplicables*1000)/10:0};
-  const fila=(f,esGral)=>{
-    const colorAusent=f.pctAusent<3?'#15803D':'var(--rojo)';
-    const colorCumpl=f.pctCumplimiento>=100?'#15803D':(f.pctCumplimiento>=90?'var(--naranja)':'var(--rojo)');
-    return '<tr'+(esGral?' style="background:var(--bg2);font-weight:700"':'')+'><td class="tl">'+(esGral?'TOTAL GENERAL':TICO[f.turno]+' '+TLBL[f.turno])+'</td>'
-      +'<td style="text-align:center">'+f.personas+'</td>'
-      +'<td style="text-align:center">'+f.aplicables+'</td>'
-      +'<td style="text-align:center;font-weight:700;color:#1D4ED8">'+f.pctAsist+'%</td>'
-      +'<td style="text-align:center;font-weight:700;color:'+colorAusent+'">'+f.pctAusent+'% <span style="font-weight:400;font-size:9px;color:var(--txt3)">('+f.faltas+')</span></td>'
-      +'<td style="text-align:center;font-weight:700">'+f.pctPuntualidad+'%</td>'
-      +'<td style="text-align:center;font-weight:700;color:'+colorCumpl+'">'+f.pctCumplimiento+'%</td>'
-      +'<td style="text-align:center;font-weight:700;color:var(--az)">'+(f.horasExtra||0)+' h</td></tr>';
-  };
-  const ev=statsEventualMes(mes,anio);
-  const chipsTipo=Object.keys(ev.porTipo).sort((a,b)=>ev.porTipo[b]-ev.porTipo[a])
-    .map(t=>'<span class="tbadge" style="margin-right:4px">'+t+': '+ev.porTipo[t]+'</span>').join('');
-  el.innerHTML='<div class="card"><div class="card-header"><span class="card-title">📈 Indicadores del mes</span></div>'
-    +'<div class="wrap"><table class="tbl"><thead><tr><th class="tl">Turno</th><th>Personas</th><th>Días aplic.</th>'
-    +'<th>% Asistencia</th><th>% Ausentismo<br><span style="font-weight:400;font-size:9px;color:var(--txt3)">meta &lt;3%</span></th>'
-    +'<th>% Puntualidad</th><th>Cumplimiento plantilla<br><span style="font-weight:400;font-size:9px;color:var(--txt3)">meta 100%</span></th>'
-    +'<th>Horas extra</th></tr></thead><tbody>'
-    +filas.map(f=>fila(f,false)).join('')+fila(gral,true)+'</tbody></table></div>'
-    +'<div style="font-size:9px;color:var(--txt3);padding:8px 14px">% Asistencia y % Ausentismo se calculan sobre los días que realmente le tocaban a cada quien (se excluyen sus días de descanso). % Puntualidad = asistencias sin retardo ÷ (asistencias + retardos). Cumplimiento de plantilla = (asistencias + movimientos + pases) ÷ días aplicables. Horas extra = suma de tiempo extra cubierto en ese turno.</div>'
-    +'</div>'
-    +'<div class="card" style="margin-top:10px"><div class="card-header"><span class="card-title">🔄 Cobertura de Personal Eventual</span></div>'
-    +'<div style="padding:12px 14px;display:flex;gap:24px;flex-wrap:wrap;align-items:center">'
-    +'<div class="dash-stat"><b style="color:var(--az)">'+ev.total+'</b>Coberturas</div>'
-    +'<div class="dash-stat"><b style="color:#15803D">'+ev.personasUnicas+'</b>Personas eventuales distintas</div>'
-    +(chipsTipo?'<div style="font-size:10px;color:var(--txt3)">Por tipo cubierto: '+chipsTipo+'</div>':'<div style="font-size:10px;color:var(--txt3)">Sin coberturas registradas este mes</div>')
-    +'</div></div>';
+  construirIdxInc();
+  try{
+    const corte=ultimoDiaContable(mes,anio);
+    const finMesDia=new Date(anio,mes+1,0).getDate();
+    const mesCompleto=corte===finMesDia;
+    const pv=_mesPrev(mes,anio);
+    const filas=TURNOS.map(t=>calcIndicadoresTurno(t,mes,anio));
+    const gral=sumarInd(filas);
+    const filasPrev=TURNOS.map(t=>calcIndicadoresTurno(t,pv.mes,pv.anio));
+    const gralPrev=sumarInd(filasPrev);
+    const prevDe=(f)=>f.turno==='__gral'?gralPrev:filasPrev[TURNOS.indexOf(f.turno)];
+    const nombreTurno=f=>f.turno==='__gral'?'TOTAL GENERAL':TICO[f.turno]+' '+TLBL[f.turno];
+    const rowSt=f=>f.turno==='__gral'?' style="background:var(--bg2);font-weight:700"':'';
+    const td=(v,st)=>'<td style="text-align:center'+(st?';'+st:'')+'">'+v+'</td>';
+    const th=(t,sub)=>'<th>'+t+(sub?'<br><span style="font-weight:400;font-size:9px;color:var(--txt3)">'+sub+'</span>':'')+'</th>';
+    const card=(titulo,thead,body,nota,extraHdr)=>'<div class="card" style="margin-bottom:10px"><div class="card-header"><span class="card-title">'+titulo+'</span>'+(extraHdr||'')+'</div>'
+      +'<div class="wrap"><table class="tbl"><thead><tr>'+thead+'</tr></thead><tbody>'+body+'</tbody></table></div>'
+      +(nota?'<div style="font-size:9px;color:var(--txt3);padding:8px 14px">'+nota+'</div>':'')+'</div>';
+    const todas=filas.concat([gral]);
+
+    // Aviso de periodo
+    let aviso='';
+    if(corte===0){
+      aviso='<div class="card" style="margin-bottom:10px;padding:10px 14px;font-size:11px;color:var(--txt2);background:#FEF3C7">⏳ <b>'+mesAnioLbl(mes,anio)+'</b> todavía no tiene días cerrados, por eso los porcentajes aparecen como «—». Los bloques de plantilla y vacaciones sí se muestran.</div>';
+    } else if(!mesCompleto){
+      aviso='<div class="card" style="margin-bottom:10px;padding:10px 14px;font-size:11px;color:var(--txt2);background:#EFF6FF">📅 <b>Mes en curso:</b> los indicadores se calculan con los días ya cerrados (del 1 al '+corte+'). Los días que aún no ocurren no cuentan, para que los porcentajes no salgan artificialmente bajos.</div>';
+    }
+
+    // 1) Indicadores generales + tendencia
+    const filaA=f=>{
+      const p=prevDe(f),hayPrev=p.aplicables>0&&f.aplicables>0;
+      const colorAusent=f.pctAusent===null?'':(f.pctAusent<3?'#15803D':'var(--rojo)');
+      const colorCumpl=f.pctCumplimiento===null?'':(f.pctCumplimiento>=100?'#15803D':(f.pctCumplimiento>=90?'var(--naranja)':'var(--rojo)'));
+      return '<tr'+rowSt(f)+'><td class="tl">'+nombreTurno(f)+'</td>'
+        +td(f.personas)+td(f.aplicables)
+        +td('<b style="color:#1D4ED8">'+_pf(f.pctAsist)+'</b>'+(hayPrev?flechaTend(f.pctAsist,p.pctAsist,true,' pp'):''))
+        +td('<b style="color:'+colorAusent+'">'+_pf(f.pctAusent)+'</b> <span style="font-weight:400;font-size:9px;color:var(--txt3)">('+f.faltas+')</span>'+(hayPrev?flechaTend(f.pctAusent,p.pctAusent,false,' pp'):''))
+        +td('<b>'+_pf(f.pctPuntualidad)+'</b>'+(hayPrev?flechaTend(f.pctPuntualidad,p.pctPuntualidad,true,' pp'):''))
+        +td('<b style="color:'+colorCumpl+'">'+_pf(f.pctCumplimiento)+'</b>'+(hayPrev?flechaTend(f.pctCumplimiento,p.pctCumplimiento,true,' pp'):''))
+        +'</tr>';
+    };
+    const cardA=card('📈 Indicadores del mes',
+      '<th class="tl">Turno</th>'+th('Personas')+th('Días aplic.')+th('% Asistencia')+th('% Ausentismo','meta &lt;3%')+th('% Puntualidad')+th('Cumplimiento plantilla','meta 100%'),
+      todas.map(filaA).join(''),
+      '% Asistencia y % Ausentismo se calculan sobre los días que realmente le tocaban a cada quien (sin días de descanso). % Puntualidad = asistencias sin retardo ÷ (asistencias + retardos). Cumplimiento de plantilla = (asistencias + movimientos + pases) ÷ días aplicables. Las flechas comparan contra el mes anterior en puntos porcentuales (pp): verde = mejoró, rojo = empeoró.');
+
+    // 2) Ausentismo por tipo + reincidencia
+    const reinc=reincidentesPorTurno(mes,anio);
+    const reincTot=reinc?TURNOS.reduce((s,t)=>s+reinc[t],0):null;
+    const filaB=f=>{
+      const r=f.turno==='__gral'?reincTot:(reinc?reinc[f.turno]:null);
+      const colorF=f.pctAusent===null?'':(f.pctAusent<3?'#15803D':'var(--rojo)');
+      return '<tr'+rowSt(f)+'><td class="tl">'+nombreTurno(f)+'</td>'
+        +td('<b style="color:'+colorF+'">'+_pf(f.pctAusent)+'</b> <span style="font-weight:400;font-size:9px;color:var(--txt3)">('+f.faltas+')</span>')
+        +td('<b>'+_pf(f.pctIncap)+'</b> <span style="font-weight:400;font-size:9px;color:var(--txt3)">('+f.incap+')</span>')
+        +td('<b>'+_pf(f.pctPerm)+'</b> <span style="font-weight:400;font-size:9px;color:var(--txt3)">('+f.permisos+')</span>')
+        +td(r===null?'—':'<b style="color:'+(r>0?'var(--naranja)':'#15803D')+'">'+r+'</b>')+'</tr>';
+    };
+    const cardB=card('🩺 Ausentismo por tipo y reincidencia',
+      '<th class="tl">Turno</th>'+th('Faltas injustificadas','meta &lt;3%')+th('Incapacidades')+th('Licencias y permisos','con y sin goce')+th('Personas reincidentes','3+ faltas/retardos en 3 meses'),
+      todas.map(filaB).join(''),
+      'Cada porcentaje es días con ese tipo ÷ días aplicables (entre paréntesis, el número de días). Separar faltas de incapacidades evita que una incapacidad médica se lea como indisciplina. Reincidentes es solo un conteo de personas por turno (sin nombres); se calcula con los 3 meses que terminan en el mes elegido.');
+
+    // 3) Cobertura de huecos: tiempo extra, eventuales o personal presente
+    // (los Movimientos son acuerdos de cambio entre el personal: NO cubren huecos).
+    const ev=statsEventualMes(mes,anio);
+    const huecosTot=gral.huecos;
+    const absorbidos=Math.max(0,huecosTot-gral.teReg-ev.total);
+    const baseBar=gral.teReg+ev.total+absorbidos;
+    const seg=(n,color,lbl)=>n>0?'<div style="flex:'+n+';background:'+color+';color:#fff;font-size:10px;font-weight:700;padding:6px 4px;text-align:center;min-width:44px" title="'+lbl+': '+n+'">'+Math.round(n/baseBar*100)+'%</div>':'';
+    const filaC=f=>{
+      const p=prevDe(f),hayPrev=p.horasProg>0&&f.horasProg>0;
+      return '<tr'+rowSt(f)+'><td class="tl">'+nombreTurno(f)+'</td>'
+        +td('<b>'+f.huecos+'</b> <span style="font-weight:400;font-size:9px;color:var(--txt3)">('+f.faltas+' F · '+f.incap+' I · '+f.permisos+' L · '+f.vac+' V)</span>')
+        +td(f.teReg)
+        +td('<b style="color:var(--az)">'+f.horasExtra+' h</b>'+((hayPrev&&mesCompleto)?flechaTend(f.horasExtra,p.horasExtra,false,' h'):''))
+        +td(f.horasProg?Math.round(f.horasProg).toLocaleString('es-MX')+' h':'—')
+        +td('<b>'+_pf(f.pctHE)+'</b>'+(hayPrev?flechaTend(f.pctHE,p.pctHE,false,' pp'):''))+'</tr>';
+    };
+    const chipsTipo=Object.keys(ev.porTipo).sort((a,b)=>ev.porTipo[b]-ev.porTipo[a]).map(t=>'<span class="tbadge" style="margin-right:4px">'+t+': '+ev.porTipo[t]+'</span>').join('');
+    const cardC=card('🔄 Huecos de plantilla y tiempo extra',
+      '<th class="tl">Turno</th>'+th('Huecos (días de ausencia)','F falta · I incap. · L licencia · V vacaciones')+th('Tiempo extra','registros')+th('Horas extra')+th('Horas programadas')+th('% horas extra','sobre programadas'),
+      todas.map(filaC).join(''),
+      'Hueco = día que le tocaba trabajar a alguien y no estuvo (falta, incapacidad, licencia o vacaciones). Los movimientos NO cuentan: son acuerdos de cambio entre el personal y no generan hueco. Horas programadas = suma de las horas de cada día aplicable (Matutino 7.5 h, Vespertino 7 h, Nocturno 11 h, J. Acumulada 14 h; Supervisoras según el horario de cada una). El tiempo extra se cuenta en el turno cubierto.')
+      +'<div class="card" style="margin:-4px 0 10px 0"><div class="card-header"><span class="card-title">¿Cómo se resolvieron los huecos del mes?</span></div><div style="padding:12px 14px">'
+      +(baseBar?'<div style="display:flex;border-radius:6px;overflow:hidden;margin-bottom:8px">'+seg(gral.teReg,'#1A8A6F','Tiempo extra')+seg(ev.total,'#D97706','Personal eventual')+seg(absorbidos,'#64748B','Absorbido por el personal presente')+'</div>'
+        +'<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:11px;color:var(--txt2)"><span><b style="color:#1A8A6F">■</b> Tiempo extra: <b>'+gral.teReg+'</b></span><span><b style="color:#D97706">■</b> Eventual: <b>'+ev.total+'</b> ('+ev.personasUnicas+' persona'+(ev.personasUnicas!==1?'s':'')+' distinta'+(ev.personasUnicas!==1?'s':'')+')</span><span><b style="color:#64748B">■</b> Absorbido por personal presente: <b>'+absorbidos+'</b></span><span>de <b>'+huecosTot+'</b> huecos</span></div>'
+        +(chipsTipo?'<div style="font-size:10px;color:var(--txt3);margin-top:6px">Eventual por tipo cubierto: '+chipsTipo+'</div>':'')
+        +'<div style="font-size:9px;color:var(--txt3);margin-top:6px">Es una estimación: compara la cantidad de huecos contra los registros de tiempo extra y de eventual del mes. Si hubo tiempo extra por otra razón (p. ej. plaza vacante o alta ocupación), «absorbido» saldrá menor de lo real.</div>'
+        :'<div style="font-size:11px;color:var(--txt3)">Sin huecos ni coberturas registradas en este mes.</div>')
+      +'</div></div>';
+
+    // 4) Plantilla, vacantes y rotación
+    const rots=TURNOS.map(t=>statsRotacion(t,mes,anio));
+    const rotTot=rots.every(r=>r)?sumarRot(rots):null;
+    const hoyISO=new Date().toISOString().slice(0,10);
+    const autor=TURNOS.map(autorizadaTurno);
+    const capturadas=autor.filter(a=>a!==null);
+    const filaD=(lbl,esGral,aut,real,r)=>{
+      const vac=(aut===null)?null:aut-real;
+      const vacTxt=vac===null?'—':(vac>0?'<b style="color:var(--rojo)">'+vac+'</b>':(vac===0?'<b style="color:#15803D">0</b>':'<b style="color:var(--naranja)">+'+(-vac)+' sobre plantilla</b>'));
+      const rotMes=r&&r.promMes?Math.round(r.bajasMes/r.promMes*1000)/10:null;
+      const rotAnio=r&&r.promAnio?Math.round(r.bajasAnio/r.promAnio*1000)/10:null;
+      return '<tr'+(esGral?' style="background:var(--bg2);font-weight:700"':'')+'><td class="tl">'+lbl+'</td>'
+        +td(aut===null?'—':aut)+td(real)+td(vacTxt)
+        +td(r?r.altas:'—')+td(r?r.bajasMes:'—')+td(rotMes===null?'—':'<b>'+rotMes+'%</b>')
+        +td(r?r.bajasAnio:'—')+td(rotAnio===null?'—':'<b>'+rotAnio+'%</b>')+'</tr>';
+    };
+    let bodyD=TURNOS.map((t,i)=>filaD(TICO[t]+' '+TLBL[t],false,autor[i],rots[i]?rots[i].fin:plantillaEnFecha(t,hoyISO),rots[i])).join('');
+    const realTot=TURNOS.reduce((s,t,i)=>s+(rots[i]?rots[i].fin:plantillaEnFecha(t,hoyISO)),0);
+    bodyD+=filaD('TOTAL GENERAL',true,capturadas.length?capturadas.reduce((s,a)=>s+a,0):null,realTot,rotTot);
+    const btnPlantilla='<button class="btn btn-ghost" style="float:right;padding:3px 10px;font-size:10px" onclick="rPinJohana(abrirPlantillaAutorizada)">⚙ Plantilla autorizada</button>';
+    const cardD=card('👥 Plantilla, vacantes y rotación',
+      '<th class="tl">Turno</th>'+th('Plazas autorizadas')+th('Plantilla real','al cierre')+th('Vacantes')+th('Altas','del mes')+th('Bajas','del mes')+th('Rotación mensual','bajas ÷ plantilla prom.')+th('Bajas','en el año')+th('Rotación acumulada','año a la fecha'),
+      bodyD,
+      (capturadas.length?'':'<b>Aún no hay plazas autorizadas capturadas</b> — usa el botón «Plantilla autorizada» (solo Johana) para calcular las vacantes. ')
+      +'Plantilla real: personal base activo del turno (sin pasantes ni eventuales). Rotación = bajas ÷ plantilla promedio del periodo (plantilla al inicio y al cierre). Altas/bajas salen de las fechas de ingreso y de baja del catálogo de Personal.',
+      btnPlantilla);
+
+    // 5) Vacaciones pendientes
+    const vacs=TURNOS.map(statsVacTurno);
+    const vacTot=vacs.reduce((a,v)=>{Object.keys(a).forEach(k=>a[k]+=v[k]);return a;},{conDerecho:0,derecho:0,tomados:0,saldo:0,conSaldo:0,enRiesgo:0});
+    const filaE=(lbl,esGral,v)=>{
+      const uso=v.derecho?Math.round(v.tomados/v.derecho*1000)/10:null;
+      return '<tr'+(esGral?' style="background:var(--bg2);font-weight:700"':'')+'><td class="tl">'+lbl+'</td>'
+        +td(v.conDerecho)+td(v.derecho)+td(v.tomados)
+        +td('<b>'+v.saldo+'</b>')+td(uso===null?'—':'<b>'+uso+'%</b>')
+        +td(v.conSaldo)+td(v.enRiesgo>0?'<b style="color:var(--rojo)">'+v.enRiesgo+'</b>':'<b style="color:#15803D">0</b>')+'</tr>';
+    };
+    const cardE=card('🏖 Vacaciones pendientes <span style="font-weight:400;font-size:10px;color:var(--txt3)">(situación al día de hoy)</span>',
+      '<th class="tl">Turno</th>'+th('Personas con derecho')+th('Días que corresponden')+th('Días tomados')+th('Saldo pendiente','días')+th('% usado')+th('Personas con saldo')+th('En riesgo','saldo ≥50% y vence en ≤90 días'),
+      TURNOS.map((t,i)=>filaE(TICO[t]+' '+TLBL[t],false,vacs[i])).join('')+filaE('TOTAL GENERAL',true,vacTot),
+      'Es una foto de HOY (no cambia con el mes que elijas): usa el periodo vacacional vigente de cada persona, con las equivalencias de Nocturno (×2) y J. Acumulada (×3). «En riesgo» = personas que aún no han tomado al menos la mitad de su derecho y su periodo vence en 90 días o menos.');
+
+    el.innerHTML='<style>.tend{font-size:9px;font-weight:600;line-height:1.2}</style>'+aviso+cardA+cardB+cardC+cardD+cardE;
+  } finally { _IDX_INC=null; }
 }
 function renderConc(){
   const mes=parseInt(document.getElementById('c-mes').value),anio=parseInt(document.getElementById('c-anio').value),ft=document.getElementById('c-turno').value;
@@ -2490,7 +2739,7 @@ function descargarRespaldoCompleto(){
   const payload={
     generado:new Date().toISOString(),
     version:'respaldo-incidencias-cmga-v1',
-    personal:DB.personal, incidencias:DB.incidencias, eventual:DB.eventual, textra:DB.textra, notas:DB.notas
+    personal:DB.personal, incidencias:DB.incidencias, eventual:DB.eventual, textra:DB.textra, notas:DB.notas, plantilla:DB.plantilla
   };
   const b=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8;'}),u=URL.createObjectURL(b),a=document.createElement('a');
   a.href=u; a.download='Respaldo_Incidencias_CMGA_'+new Date().toISOString().slice(0,10)+'.json'; a.click(); URL.revokeObjectURL(u);
@@ -2631,7 +2880,7 @@ function cargarLocal(){
     const r=localStorage.getItem(KEY);
     if(!r)return false;
     const p=JSON.parse(r);
-    if(p.db)DB=p.db; if(!DB.notas)DB.notas=[]; if(p.nid)NID=p.nid; return true;
+    if(p.db)DB=p.db; if(!DB.notas)DB.notas=[]; if(!DB.plantilla)DB.plantilla=[]; if(p.nid)NID=p.nid; return true;
   }catch(e){return false;}
 }
 function recalcNid(){
@@ -2667,6 +2916,9 @@ async function cargarDatos(){
     }
     if(Array.isArray(data.notas)){
       DB.notas=data.notas.map(n=>({id:str(n.id),noEmp:str(n.noEmp),nota:str(n.nota)}));
+    }
+    if(Array.isArray(data.plantilla)){
+      DB.plantilla=data.plantilla.map(r=>({id:str(r.id),turno:str(r.turno),autorizada:str(r.autorizada),ultimaEdicionPor:str(r.ultimaEdicionPor),ultimaEdicionFecha:fecha(r.ultimaEdicionFecha)}));
     }
     recalcNid(); guardarLocal();
     console.log('Sincronizado — personal:',DB.personal.length,'inc:',DB.incidencias.length,'notas:',DB.notas.length);

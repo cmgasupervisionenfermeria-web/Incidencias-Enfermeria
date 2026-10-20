@@ -2033,10 +2033,12 @@ function ingresoISO(p){
   if(!f||!f.anioTxt)return'';
   return fStr(normalizarAnio(f.anioTxt),f.mes,f.dia);
 }
-function enPlantillaBase(p,turno){return p.turno===turno&&p.tipo!=='pasante';}
-function plantillaEnFecha(turno,fechaStr){
+function esCamillero(p){return (p.puesto||'').toLowerCase().indexOf('camillero')!==-1;}
+// grupo: 'enf' = personal de enfermería, 'cam' = camilleros, sin grupo = todos
+function enPlantillaBase(p,turno,grupo){return p.turno===turno&&p.tipo!=='pasante'&&(!grupo||(grupo==='cam')===esCamillero(p));}
+function plantillaEnFecha(turno,fechaStr,grupo){
   return DB.personal.filter(p=>{
-    if(!enPlantillaBase(p,turno))return false;
+    if(!enPlantillaBase(p,turno,grupo))return false;
     const ing=ingresoISO(p);
     if(ing&&ing>fechaStr)return false;
     if(p.activo==='0'&&(!p.fechaBaja||p.fechaBaja<=fechaStr))return false;
@@ -2044,47 +2046,58 @@ function plantillaEnFecha(turno,fechaStr){
   }).length;
 }
 function _diaAntes(s){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()-1);return fStr(d.getFullYear(),d.getMonth(),d.getDate());}
-function statsRotacion(turno,mes,anio){
+function statsRotacion(turno,mes,anio,grupo){
   const hoy=new Date();
   if(anio*12+mes>hoy.getFullYear()*12+hoy.getMonth())return null;
   const finMes=new Date(anio,mes+1,0),fd=finMes>hoy?hoy:finMes;
   const finStr=fStr(fd.getFullYear(),fd.getMonth(),fd.getDate());
   const iniMes=fStr(anio,mes,1),iniAnio=fStr(anio,0,1);
-  const bajasDesde=d=>DB.personal.filter(p=>enPlantillaBase(p,turno)&&p.activo==='0'&&p.fechaBaja&&p.fechaBaja>=d&&p.fechaBaja<=finStr).length;
-  const altas=DB.personal.filter(p=>{if(!enPlantillaBase(p,turno))return false;const i=ingresoISO(p);return i&&i>=iniMes&&i<=finStr;}).length;
-  const fin=plantillaEnFecha(turno,finStr);
+  const bajasDesde=d=>DB.personal.filter(p=>enPlantillaBase(p,turno,grupo)&&p.activo==='0'&&p.fechaBaja&&p.fechaBaja>=d&&p.fechaBaja<=finStr).length;
+  const altas=DB.personal.filter(p=>{if(!enPlantillaBase(p,turno,grupo))return false;const i=ingresoISO(p);return i&&i>=iniMes&&i<=finStr;}).length;
+  const fin=plantillaEnFecha(turno,finStr,grupo);
   return{altas,bajasMes:bajasDesde(iniMes),bajasAnio:bajasDesde(iniAnio),fin,
-    promMes:(plantillaEnFecha(turno,_diaAntes(iniMes))+fin)/2,
-    promAnio:(plantillaEnFecha(turno,_diaAntes(iniAnio))+fin)/2};
+    promMes:(plantillaEnFecha(turno,_diaAntes(iniMes),grupo)+fin)/2,
+    promAnio:(plantillaEnFecha(turno,_diaAntes(iniAnio),grupo)+fin)/2};
 }
 function sumarRot(lista){
   const t={altas:0,bajasMes:0,bajasAnio:0,fin:0,promMes:0,promAnio:0};
   lista.forEach(r=>Object.keys(t).forEach(k=>t[k]+=r[k]));
   return t;
 }
-function autorizadaTurno(turno){
-  const r=(DB.plantilla||[]).find(x=>x.turno===turno);
+// La plantilla autorizada se guarda por turno Y grupo. Enfermería usa el
+// id del turno (compatible con lo ya capturado); Camilleros usa «turno_cam».
+function claveAutorizada(turno,grupo){return grupo==='cam'?turno+'_cam':turno;}
+function autorizadaTurno(turno,grupo){
+  const k=claveAutorizada(turno,grupo);
+  const r=(DB.plantilla||[]).find(x=>x.turno===k);
   if(!r||r.autorizada===''||r.autorizada===null||r.autorizada===undefined)return null;
   const n=parseInt(r.autorizada);
   return isNaN(n)?null:n;
 }
 function abrirPlantillaAutorizada(){
-  const html='<div style="font-size:11px;color:var(--txt2);margin-bottom:10px">Número de plazas AUTORIZADAS por turno (sin contar pasantes ni eventuales). Con esto el Concentrado calcula las vacantes. Deja en blanco el turno que no quieras medir.</div>'
-    +TURNOS.map(t=>{const a=autorizadaTurno(t);return '<div class="fr"><label class="fl">'+TICO[t]+' '+TLBL[t]+'</label><input id="pa-'+t+'" class="fi" type="number" min="0" step="1" value="'+(a===null?'':a)+'" placeholder="Plazas autorizadas"></div>';}).join('');
+  const camTurnos=TURNOS.filter(t=>t!=='sup');
+  const html='<div style="font-size:11px;color:var(--txt2);margin-bottom:10px">Número de plazas AUTORIZADAS por turno (sin contar pasantes ni eventuales), separadas en personal de enfermería y camilleros. Con esto el Concentrado calcula las vacantes de cada grupo. Deja en blanco lo que no quieras medir.</div>'
+    +'<div style="font-weight:700;font-size:12px;color:var(--az);margin:6px 0">🩺 Personal de enfermería</div>'
+    +TURNOS.map(t=>{const a=autorizadaTurno(t,'enf');return '<div class="fr"><label class="fl">'+TICO[t]+' '+TLBL[t]+'</label><input id="pa-'+t+'" class="fi" type="number" min="0" step="1" value="'+(a===null?'':a)+'" placeholder="Plazas autorizadas"></div>';}).join('')
+    +'<div style="font-weight:700;font-size:12px;color:var(--az);margin:12px 0 6px">🛏 Camilleros</div>'
+    +camTurnos.map(t=>{const a=autorizadaTurno(t,'cam');return '<div class="fr"><label class="fl">'+TICO[t]+' '+TLBL[t]+'</label><input id="pa-'+t+'_cam" class="fi" type="number" min="0" step="1" value="'+(a===null?'':a)+'" placeholder="Plazas autorizadas"></div>';}).join('');
   abrirModal('⚙ Plantilla autorizada por turno',html,()=>{
     if(!DB.plantilla)DB.plantilla=[];
     const hoyISO=new Date().toISOString().slice(0,10);
     const quien=USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'';
-    TURNOS.forEach(t=>{
-      const raw=document.getElementById('pa-'+t).value.trim();
+    const guarda=(t,grupo)=>{
+      const k=claveAutorizada(t,grupo);
+      const raw=document.getElementById('pa-'+k).value.trim();
       const nuevo=raw===''?'':String(Math.max(0,parseInt(raw)||0));
-      const ant=autorizadaTurno(t);
+      const ant=autorizadaTurno(t,grupo);
       if((ant===null?'':String(ant))===nuevo)return;
-      const rec={id:t,turno:t,autorizada:nuevo,ultimaEdicionPor:quien,ultimaEdicionFecha:hoyISO};
-      const i=DB.plantilla.findIndex(x=>x.turno===t);
+      const rec={id:k,turno:k,autorizada:nuevo,ultimaEdicionPor:quien,ultimaEdicionFecha:hoyISO};
+      const i=DB.plantilla.findIndex(x=>x.turno===k);
       if(i>=0)DB.plantilla[i]=rec;else DB.plantilla.push(rec);
       syncPlantilla(rec);
-    });
+    };
+    TURNOS.forEach(t=>guarda(t,'enf'));
+    camTurnos.forEach(t=>guarda(t,'cam'));
     guardarLocal();cerrarModal();renderConc();toast('✓ Plantilla autorizada guardada');
   },'Guardar');
 }
@@ -2212,31 +2225,38 @@ function renderIndicadoresConc(mes,anio){
         :'<div style="font-size:11px;color:var(--txt3)">Sin huecos ni coberturas registradas en este mes.</div>')
       +'</div></div>';
 
-    // 4) Plantilla, vacantes y rotación
-    const rots=TURNOS.map(t=>statsRotacion(t,mes,anio));
-    const rotTot=rots.every(r=>r)?sumarRot(rots):null;
+    // 4) Plantilla, vacantes y rotación — separado en Enfermería y Camilleros
     const hoyISO=new Date().toISOString().slice(0,10);
-    const autor=TURNOS.map(autorizadaTurno);
-    const capturadas=autor.filter(a=>a!==null);
-    const filaD=(lbl,esGral,aut,real,r)=>{
-      const vac=(aut===null)?null:aut-real;
-      const vacTxt=vac===null?'—':(vac>0?'<b style="color:var(--rojo)">'+vac+'</b>':(vac===0?'<b style="color:#15803D">0</b>':'<b style="color:var(--naranja)">+'+(-vac)+' sobre plantilla</b>'));
-      const rotMes=r&&r.promMes?Math.round(r.bajasMes/r.promMes*1000)/10:null;
-      const rotAnio=r&&r.promAnio?Math.round(r.bajasAnio/r.promAnio*1000)/10:null;
-      return '<tr'+(esGral?' style="background:var(--bg2);font-weight:700"':'')+'><td class="tl">'+lbl+'</td>'
-        +td(aut===null?'—':aut)+td(real)+td(vacTxt)
-        +td(r?r.altas:'—')+td(r?r.bajasMes:'—')+td(rotMes===null?'—':'<b>'+rotMes+'%</b>')
-        +td(r?r.bajasAnio:'—')+td(rotAnio===null?'—':'<b>'+rotAnio+'%</b>')+'</tr>';
+    const theadD='<th class="tl">Turno</th>'+th('Plazas autorizadas')+th('Plantilla real','al cierre')+th('Vacantes')+th('Altas','del mes')+th('Bajas','del mes')+th('Rotación mensual','bajas ÷ plantilla prom.')+th('Bajas','en el año')+th('Rotación acumulada','año a la fecha');
+    const bloquePlantilla=(grupo,titulo,turnosG)=>{
+      const rots=turnosG.map(t=>statsRotacion(t,mes,anio,grupo));
+      const rotTot=rots.every(r=>r)?sumarRot(rots):null;
+      const autor=turnosG.map(t=>autorizadaTurno(t,grupo));
+      const capturadas=autor.filter(a=>a!==null);
+      const filaD=(lbl,esGral,aut,real,r)=>{
+        const vac=(aut===null)?null:aut-real;
+        const vacTxt=vac===null?'—':(vac>0?'<b style="color:var(--rojo)">'+vac+'</b>':(vac===0?'<b style="color:#15803D">0</b>':'<b style="color:var(--naranja)">+'+(-vac)+' sobre plantilla</b>'));
+        const rotMes=r&&r.promMes?Math.round(r.bajasMes/r.promMes*1000)/10:null;
+        const rotAnio=r&&r.promAnio?Math.round(r.bajasAnio/r.promAnio*1000)/10:null;
+        return '<tr'+(esGral?' style="background:var(--bg2);font-weight:700"':'')+'><td class="tl">'+lbl+'</td>'
+          +td(aut===null?'—':aut)+td(real)+td(vacTxt)
+          +td(r?r.altas:'—')+td(r?r.bajasMes:'—')+td(rotMes===null?'—':'<b>'+rotMes+'%</b>')
+          +td(r?r.bajasAnio:'—')+td(rotAnio===null?'—':'<b>'+rotAnio+'%</b>')+'</tr>';
+      };
+      const reales=turnosG.map((t,i)=>rots[i]?rots[i].fin:plantillaEnFecha(t,hoyISO,grupo));
+      let body=turnosG.map((t,i)=>filaD(TICO[t]+' '+TLBL[t],false,autor[i],reales[i],rots[i])).join('');
+      body+=filaD('TOTAL '+(grupo==='cam'?'CAMILLEROS':'ENFERMERÍA'),true,capturadas.length?capturadas.reduce((s,a)=>s+a,0):null,reales.reduce((s,n)=>s+n,0),rotTot);
+      return {titulo,body,sinAutorizadas:!capturadas.length};
     };
-    let bodyD=TURNOS.map((t,i)=>filaD(TICO[t]+' '+TLBL[t],false,autor[i],rots[i]?rots[i].fin:plantillaEnFecha(t,hoyISO),rots[i])).join('');
-    const realTot=TURNOS.reduce((s,t,i)=>s+(rots[i]?rots[i].fin:plantillaEnFecha(t,hoyISO)),0);
-    bodyD+=filaD('TOTAL GENERAL',true,capturadas.length?capturadas.reduce((s,a)=>s+a,0):null,realTot,rotTot);
+    const bEnf=bloquePlantilla('enf','Personal de enfermería',TURNOS);
+    const bCam=bloquePlantilla('cam','Camilleros',TURNOS.filter(t=>t!=='sup'));
     const btnPlantilla='<button class="btn btn-ghost" style="float:right;padding:3px 10px;font-size:10px" onclick="rPinJohana(abrirPlantillaAutorizada)">⚙ Plantilla autorizada</button>';
+    const subT=t=>'<tr><td colspan="9" class="tl" style="background:#EEF2FF;color:#1B3A6B;font-weight:800;font-size:11px">'+t+'</td></tr>';
     const cardD=card('👥 Plantilla, vacantes y rotación',
-      '<th class="tl">Turno</th>'+th('Plazas autorizadas')+th('Plantilla real','al cierre')+th('Vacantes')+th('Altas','del mes')+th('Bajas','del mes')+th('Rotación mensual','bajas ÷ plantilla prom.')+th('Bajas','en el año')+th('Rotación acumulada','año a la fecha'),
-      bodyD,
-      (capturadas.length?'':'<b>Aún no hay plazas autorizadas capturadas</b> — usa el botón «Plantilla autorizada» (solo Johana) para calcular las vacantes. ')
-      +'Plantilla real: personal base activo del turno (sin pasantes ni eventuales). Rotación = bajas ÷ plantilla promedio del periodo (plantilla al inicio y al cierre). Altas/bajas salen de las fechas de ingreso y de baja del catálogo de Personal.',
+      theadD,
+      subT('🩺 '+bEnf.titulo)+bEnf.body+subT('🛏 '+bCam.titulo)+bCam.body,
+      ((bEnf.sinAutorizadas&&bCam.sinAutorizadas)?'<b>Aún no hay plazas autorizadas capturadas</b> — usa el botón «Plantilla autorizada» (solo Johana) para calcular las vacantes. ':'')
+      +'Camilleros = personal cuyo puesto dice «camillero»; el resto cuenta como personal de enfermería. Plantilla real: personal base activo del turno (sin pasantes ni eventuales). Rotación = bajas ÷ plantilla promedio del periodo (plantilla al inicio y al cierre). Altas/bajas salen de las fechas de ingreso y de baja del catálogo de Personal.',
       btnPlantilla);
 
     // 5) Vacaciones pendientes

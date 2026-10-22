@@ -89,6 +89,17 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .rs-panel[open] summary{border-bottom:1px solid var(--bg3)}
 .rs-n{color:#fff;border-radius:99px;padding:1px 9px;font-size:10px;font-weight:700}
 .rs-body{padding:10px 14px 8px}
+.rs-grp{border:1px solid var(--bg3);border-radius:8px;margin-bottom:8px;overflow:hidden}
+.rs-grp-h{background:var(--bg2);padding:6px 10px;font-size:11px;font-weight:700;color:var(--txt)}
+.rs-grp-h span{font-weight:500;color:var(--txt3)}
+.rs-grp .ai{margin:0;border-radius:0;border-bottom:1px solid var(--bg3)}
+.rs-grp .ai:last-child{border-bottom:none}
+.an-fila{display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--bg3)}
+.an-fila:last-child{border-bottom:none}
+.an-fecha{min-width:46px;text-align:center;background:var(--az3,#EEF2FF);color:var(--az2,#1B3A6B);border-radius:8px;padding:3px 4px;line-height:1.15}
+.an-fecha b{display:block;font-size:15px}.an-fecha span{font-size:9px;text-transform:uppercase;font-weight:700}
+.an-fila.hoy .an-fecha{background:#DCFCE7;color:#15803D}
+.an-est{margin-left:auto;font-size:10px;font-weight:700;border-radius:99px;padding:2px 9px;white-space:nowrap}
 .ai{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;margin-bottom:5px}
 .ai.am{background:var(--naranja2);border-left:3px solid var(--naranja)}.ai.aps{background:var(--rojo2);border-left:3px solid var(--rojo)}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:200;align-items:center;justify-content:center}
@@ -184,21 +195,23 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 <!-- RESUMEN / DASHBOARD -->
 <div class="page active" id="page-resumen">
   <div style="margin-bottom:12px">
-    <div class="sec-t">🏠 Resumen quincenal</div>
-    <div class="sec-s" id="resumen-fecha">...</div>
+    <div class="sec-t">🏠 Resumen</div>
+    <div class="sec-s">Avisos del día y seguimiento de captura por turno</div>
   </div>
-  <div class="period-bar" style="margin-bottom:14px">
-    <div class="period-nav"><button onclick="camPeriodo(-1)">‹</button><span id="lbl-resumen" class="period-label">...</span><button onclick="camPeriodo(1)">›</button></div>
-    <button class="period-btn active" id="q1-resumen" onclick="setQ(1)">Q1 · 11–25</button>
-    <button class="period-btn" id="q2-resumen" onclick="setQ(2)">Q2 · 26–10</button>
-  </div>
-  <div id="resumen-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:18px"></div>
-  <div class="rs-seccion">Avisos <span style="font-weight:400;text-transform:none;letter-spacing:0">— toca un panel para abrirlo</span></div>
+  <div class="rs-seccion">Avisos</div>
   <div id="resumen-alertas"></div>
   <div id="resumen-bloqueados"></div>
   <div id="resumen-vencimientos"></div>
   <div id="resumen-especiales"></div>
   <div id="resumen-aniversarios"></div>
+  <div class="rs-seccion" style="margin-top:18px">Seguimiento por turno <span style="font-weight:400;text-transform:none;letter-spacing:0" id="resumen-fecha">...</span></div>
+  <div class="period-bar" style="margin-bottom:12px">
+    <div class="period-nav"><button onclick="camPeriodo(-1)">‹</button><span id="lbl-resumen" class="period-label">...</span><button onclick="camPeriodo(1)">›</button></div>
+    <button class="period-btn active" id="q1-resumen" onclick="setQ(1)">Q1 · 11–25</button>
+    <button class="period-btn" id="q2-resumen" onclick="setQ(2)">Q2 · 26–10</button>
+  </div>
+  <div id="resumen-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:16px"></div>
+  <div id="resumen-nota-cards" style="font-size:10px;color:var(--txt3);margin-bottom:10px"></div>
 </div>
 
 <!-- PÁGINAS TURNO -->
@@ -1532,12 +1545,37 @@ function irATurno(t){
 }
 // Panel plegable para los avisos del Resumen. Recuerda si estaba abierto aunque
 // la página se vuelva a dibujar.
-const _RS_ABIERTOS={};
+const _RS_ABIERTOS={alertas:true}; // las alertas salen desplegadas por defecto
 function panelResumen(clave,icono,titulo,n,cuerpo,tono){
   const col={rojo:'var(--rojo)',naranja:'var(--naranja)',azul:'var(--az)'}[tono]||'var(--txt3)';
   return '<details class="rs-panel"'+(_RS_ABIERTOS[clave]?' open':'')+' ontoggle="_RS_ABIERTOS[\''+clave+'\']=this.open">'
     +'<summary><span>'+icono+'</span><span>'+titulo+'</span><span class="rs-n" style="background:'+col+'">'+n+'</span></summary>'
     +'<div class="rs-body">'+cuerpo+'</div></details>';
+}
+// Conteo por categoría de una quincena para un turno — mismo criterio que el
+// Concentrado: solo días en que la persona realmente le toca ESE turno
+// (esDiaAplicable), sin descansos, y sin contar dos veces a quien tiene horario
+// mixto o permuta. Los días de hoy en adelante sin registro NO son «pendientes».
+function statsResumenTurno(turno,fechas,hoyStr){
+  const pers=DB.personal.filter(p=>perteneceATurno(p,turno)&&p.activo!=='0');
+  const idx=new Map();DB.incidencias.forEach(i=>idx.set(i.noEmp+'|'+i.fecha,i));
+  const r={personas:pers.length,A:0,R:0,F:0,V:0,I:0,mp:0,otros:0,sinReg:0,porVenir:0,celdas:0,pasadas:0,regPasadas:0};
+  pers.forEach(p=>{
+    fechas.forEach(f=>{
+      if(!esDiaAplicable(p,turno,f))return;
+      const io=idx.get(p.noEmp+'|'+f);
+      if(celdaBloqueada(p,turno,f)&&!io)return;
+      const pasado=f<hoyStr;
+      r.celdas++;
+      if(pasado)r.pasadas++;
+      if(!io||!io.incidencia){if(pasado)r.sinReg++;else r.porVenir++;return;}
+      if(pasado)r.regPasadas++;
+      const c=io.incidencia;
+      if(c==='A')r.A++;else if(c==='R')r.R++;else if(c==='F')r.F++;else if(c==='V')r.V++;else if(c==='I')r.I++;
+      else if(c==='M'||c==='Ps'||c==='Pe')r.mp++;else r.otros++;
+    });
+  });
+  return r;
 }
 function renderResumen(){
   const {mes,anio,q}=Q;
@@ -1546,44 +1584,53 @@ function renderResumen(){
   const fEl=document.getElementById('resumen-fecha');
   if(fEl)fEl.textContent='📅 '+lblQ(mes,anio,q)+' · '+dias.length+' días';
   let cards='';
+  const hoyStr=fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
   TURNOS.forEach(t=>{
-    const pers=DB.personal.filter(p=>perteneceATurno(p,t)&&p.activo!=='0');
-    const cont={};
-    let sinReg=0, celdasTot=0;
-    pers.forEach(p=>{
-      fechas.forEach(f=>{
-        const io=DB.incidencias.filter(i=>i.noEmp===p.noEmp&&i.fecha===f)[0];
-        if(celdaBloqueada(p,t,f)&&!io)return;
-        celdasTot++;
-        const c=io?io.incidencia:'—';
-        cont[c]=(cont[c]||0)+1;
-        if(c==='—')sinReg++;
-      });
-    });
-    const total=pers.length;
-    const presentes=cont['A']||0, faltas=cont['F']||0, vac=cont['V']||0, inc=cont['I']||0;
+    const r=statsResumenTurno(t,fechas,hoyStr);
+    const pct=r.pasadas?Math.round(r.regPasadas/r.pasadas*100):100;
+    const colorBarra=r.sinReg===0?'#15803D':(r.sinReg/r.pasadas>0.3?'var(--rojo)':'var(--naranja)');
+    const st=(n,color,lbl,tip)=>'<div class="dash-stat" title="'+tip+'"><b style="color:'+color+';font-size:17px">'+n+'</b><span style="font-size:9px;color:var(--txt2)">'+lbl+'</span></div>';
     cards+='<div class="dash-card" onclick="irATurno(\''+t+'\')">'
-      +'<div class="card-header"><span class="card-title">'+TICO[t]+' '+TLBL[t]+'</span><span class="card-count">'+total+' personas</span></div>'
-      +'<div style="padding:12px 14px;display:flex;gap:6px;justify-content:space-between;text-align:center">'
-      +'<div class="dash-stat"><b style="color:#1D4ED8">'+presentes+'</b>Asist.</div>'
-      +'<div class="dash-stat"><b style="color:var(--rojo)">'+faltas+'</b>Faltas</div>'
-      +'<div class="dash-stat"><b style="color:#15803D">'+vac+'</b>Vacac.</div>'
-      +'<div class="dash-stat"><b style="color:#7E22CE">'+inc+'</b>Incap.</div>'
-      +'<div class="dash-stat"><b style="color:var(--txt3)">'+sinReg+'</b>S/reg.</div>'
+      +'<div class="card-header"><span class="card-title">'+TICO[t]+' '+TLBL[t]+'</span><span class="card-count">'+r.personas+' personas</span></div>'
+      +'<div style="padding:12px 14px 6px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px 4px;text-align:center">'
+      +st(r.A,'#1D4ED8','Asist.','Asistencias (A)')
+      +st(r.R,'var(--naranja)','Retardos','Retardos (R)')
+      +st(r.F,'var(--rojo)','Faltas','Faltas (F)')
+      +st(r.V,'#15803D','Vacac.','Vacaciones (V)')
+      +st(r.I,'#7E22CE','Incap.','Incapacidades (I)')
+      +st(r.mp,'#0E7490','Mov./Pases','Movimientos (M) y pases de entrada/salida (Pe/Ps)')
+      +st(r.otros,'#64748B','Otros','Licencias con/sin goce, bajas y festivos trabajados')
+      +st(r.sinReg,r.sinReg?'var(--rojo)':'#15803D','S/reg.','Días ya transcurridos que siguen sin registro')
       +'</div>'
-      +(celdasTot?'<div style="padding:0 14px 12px"><div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden"><div style="height:100%;width:'+Math.round((celdasTot-sinReg)/celdasTot*100)+'%;background:'+(sinReg===0?'#15803D':(sinReg/celdasTot>0.3?'var(--rojo)':'var(--naranja)'))+'"></div></div><div style="font-size:9px;color:var(--txt3);margin-top:3px;text-align:right">'+Math.round((celdasTot-sinReg)/celdasTot*100)+'% capturado</div></div>':'')
+      +'<div style="padding:0 14px 12px"><div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+colorBarra+'"></div></div>'
+      +'<div style="font-size:9px;color:var(--txt3);margin-top:3px;display:flex;justify-content:space-between"><span>'+r.celdas+' días-persona en la quincena'+(r.porVenir?' · '+r.porVenir+' por venir':'')+'</span><span>'+pct+'% capturado</span></div></div>'
       +'</div>';
   });
   const cardsEl=document.getElementById('resumen-cards');
   if(cardsEl)cardsEl.innerHTML=cards||'<div class="empty">Sin personal registrado</div>';
+  const notaEl=document.getElementById('resumen-nota-cards');
+  if(notaEl)notaEl.textContent='Cada tarjeta cuenta solo los días que a cada persona le tocaba trabajar en ese turno (sin descansos ni días de otro turno). «S/reg.» son días ya pasados sin registro; hoy y los días por venir no cuentan como pendientes. Asist. + Retardos + Faltas + Vacac. + Incap. + Mov./Pases + Otros + S/reg. + por venir = días-persona.';
 
   const alT=[];
   TURNOS.forEach(t=>alT.push(...calcAlertas(t,hoy.getMonth(),hoy.getFullYear()).map(a=>Object.assign({turno:t},a))));
   const alEl=document.getElementById('resumen-alertas');
   if(alEl){
-    alEl.innerHTML = alT.length
-      ? panelResumen('alertas','⚠️','Alertas de movimientos y pases · mes en curso',alT.length,
-          alT.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'" style="cursor:pointer" title="Clic para ver las fechas" onclick="abrirDesgloseAlerta(\''+a.noEmp+'\',\''+a.turno+'\','+hoy.getMonth()+','+hoy.getFullYear()+',\''+a.tipo+'\')">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+' <span style="color:var(--txt3)">('+TLBL[a.turno]+')</span></div>').join(''),
+    // Una tarjeta por colaborador, con sus alertas dentro
+    const porPersona={};
+    alT.forEach(a=>{
+      const k=a.noEmp;
+      if(!porPersona[k])porPersona[k]={nombre:a.nombre,turnos:[],items:[]};
+      if(porPersona[k].turnos.indexOf(a.turno)===-1)porPersona[k].turnos.push(a.turno);
+      porPersona[k].items.push(a);
+    });
+    const claves=Object.keys(porPersona).sort((x,y)=>porPersona[x].nombre.localeCompare(porPersona[y].nombre));
+    alEl.innerHTML = claves.length
+      ? panelResumen('alertas','⚠️','Alertas de movimientos y pases · mes en curso',claves.length+' colaborador'+(claves.length!==1?'es':''),
+          claves.map(k=>{
+            const g=porPersona[k];
+            return '<div class="rs-grp"><div class="rs-grp-h">👤 '+g.nombre+' <span>· '+g.turnos.map(t=>TLBL[t]).join(' / ')+'</span></div>'
+              +g.items.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'" style="cursor:pointer" title="Clic para ver las fechas" onclick="abrirDesgloseAlerta(\''+a.noEmp+'\',\''+a.turno+'\','+hoy.getMonth()+','+hoy.getFullYear()+',\''+a.tipo+'\')">'+(a.tipo==='Ps'?'🚨':'⚠️')+' '+a.msg+' <span style="color:var(--txt3)">— clic para ver fechas</span></div>').join('')+'</div>';
+          }).join(''),
           alT.some(a=>a.tipo==='Ps')?'rojo':'naranja')
       : '';
   }
@@ -1705,27 +1752,30 @@ function parseFechaIngreso(str){
 function renderAniversarios(){
   const el=document.getElementById('resumen-aniversarios');
   if(!el)return;
-  const hoy=new Date(), mesActual=hoy.getMonth(), diaHoy=hoy.getDate();
+  const hoy=new Date(),mesActual=hoy.getMonth(),diaHoy=hoy.getDate(),anioHoy=hoy.getFullYear();
   const lista=[];
   DB.personal.forEach(p=>{
-    if(p.activo==='0')return;
+    if(p.activo==='0'||p.tipo==='pasante'||p.turno==='eventual')return;
     const f=parseFechaIngreso(p.fechaIngreso);
-    if(f&&f.mes===mesActual){
-      let anios='';
-      if(f.anioTxt&&f.anioTxt.length===4){
-        const a=hoy.getFullYear()-parseInt(f.anioTxt);
-        if(a>0)anios=a+' año'+(a!==1?'s':'')+' — ';
-      }
-      lista.push({nombre:p.nombre,turno:p.turno,dia:f.dia,anios,esHoy:f.dia===diaHoy,pasado:f.dia<diaHoy});
-    }
+    if(!f||f.mes!==mesActual)return;
+    const anioIng=f.anioTxt?normalizarAnio(f.anioTxt):null;
+    const anios=anioIng?anioHoy-anioIng:null;
+    if(anios!==null&&anios<1)return; // ingresó este año: es alta reciente, no aniversario
+    lista.push({nombre:p.nombre,turno:p.turno,dia:f.dia,anios,dif:f.dia-diaHoy});
   });
-  lista.sort((a,b)=>a.dia-b.dia);
+  lista.sort((a,b)=>a.dia-b.dia||a.nombre.localeCompare(b.nombre));
   if(!lista.length){el.innerHTML='';return;}
+  const estado=d=>d===0?['¡Es hoy!','#DCFCE7','#15803D']
+    :d<0?['Fue hace '+(-d)+' día'+(d!==-1?'s':''),'var(--bg2)','var(--txt3)']
+    :['Faltan '+d+' día'+(d!==1?'s':''),'#EEF2FF','#4F46E5'];
   el.innerHTML=panelResumen('aniversarios','🎉','Aniversarios de ingreso — '+MESES[mesActual].charAt(0).toUpperCase()+MESES[mesActual].slice(1),lista.length,
-    lista.map(a=>'<div class="ai" style="background:'+(a.esHoy?'#DCFCE7':'var(--bg2)')+';border-left:3px solid '+(a.esHoy?'#15803D':'var(--az)')+'">'
-      +(a.esHoy?'🎂 ':(a.pasado?'✓ ':'📌 '))+'<b>'+a.nombre+'</b> — día '+a.dia+' · '+a.anios+TLBL[a.turno]
-      +(a.esHoy?' <span style="font-weight:700;color:#15803D">¡Hoy!</span>':'')
-    +'</div>').join(''),'azul');
+    lista.map(a=>{
+      const [txt,bg,col]=estado(a.dif);
+      const antig=a.anios===null?'':'Cumple <b>'+a.anios+' año'+(a.anios!==1?'s':'')+'</b> de antigüedad';
+      return '<div class="an-fila'+(a.dif===0?' hoy':'')+'"><div class="an-fecha"><b>'+a.dia+'</b><span>'+MESC[mesActual]+'</span></div>'
+        +'<div><div style="font-weight:700;font-size:12px">'+a.nombre+'</div><div style="font-size:10px;color:var(--txt3)">'+(antig?antig+' · ':'')+TLBL[a.turno]+'</div></div>'
+        +'<span class="an-est" style="background:'+bg+';color:'+col+'">'+txt+'</span></div>';
+    }).join(''),'azul');
 }
 
 // ══════════════════════════════════════════════════════════

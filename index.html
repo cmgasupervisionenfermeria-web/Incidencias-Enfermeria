@@ -80,6 +80,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .mib{padding:3px 8px;border-radius:5px;border:none;cursor:pointer;font-size:10px;font-weight:700}
 .mcl{background:rgba(255,255,255,.1);color:#fff;padding:3px 8px;border-radius:5px;border:none;cursor:pointer;font-size:10px;margin-left:3px}
 .ap{background:#fff;border-radius:var(--radio2);box-shadow:var(--sombra);padding:14px;margin-bottom:14px}
+.rs-seccion{font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin:2px 2px 8px}
+.rs-panel{background:#fff;border-radius:var(--radio2);box-shadow:var(--sombra);margin-bottom:8px;overflow:hidden}
+.rs-panel summary{cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:12px;font-weight:700;color:var(--txt);list-style:none;user-select:none}
+.rs-panel summary::-webkit-details-marker{display:none}
+.rs-panel summary::after{content:'▾';margin-left:auto;color:var(--txt3);transition:transform .15s}
+.rs-panel[open] summary::after{transform:rotate(180deg)}
+.rs-panel[open] summary{border-bottom:1px solid var(--bg3)}
+.rs-n{color:#fff;border-radius:99px;padding:1px 9px;font-size:10px;font-weight:700}
+.rs-body{padding:10px 14px 8px}
 .ai{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;margin-bottom:5px}
 .ai.am{background:var(--naranja2);border-left:3px solid var(--naranja)}.ai.aps{background:var(--rojo2);border-left:3px solid var(--rojo)}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:200;align-items:center;justify-content:center}
@@ -141,7 +150,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <button class="nav-tab" onclick="showPage('eventual',this)">🔄 Eventual</button>
   <button class="nav-tab" onclick="showPage('vacaciones',this)">🏖 Vacaciones</button>
   <button class="nav-tab" onclick="showPage('saldovac',this)">💰 Saldo Vac.</button>
-  <button class="nav-tab" onclick="showPage('historial',this)">📈 Historial Anual</button>
   <button class="nav-tab" onclick="showPage('personal',this)">👥 Personal</button>
   <button class="nav-tab" onclick="showPage('textra',this)">⏱ T. Extra</button>
   <button class="nav-tab" onclick="showPage('concentrado',this)">📊 Concentrado</button>
@@ -175,10 +183,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 
 <!-- RESUMEN / DASHBOARD -->
 <div class="page active" id="page-resumen">
-  <div id="resumen-bloqueados" style="margin-bottom:14px"></div>
-  <div id="resumen-vencimientos" style="margin-bottom:14px"></div>
-  <div id="resumen-especiales" style="margin-bottom:14px"></div>
-  <div style="margin-bottom:14px">
+  <div style="margin-bottom:12px">
     <div class="sec-t">🏠 Resumen quincenal</div>
     <div class="sec-s" id="resumen-fecha">...</div>
   </div>
@@ -187,9 +192,13 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <button class="period-btn active" id="q1-resumen" onclick="setQ(1)">Q1 · 11–25</button>
     <button class="period-btn" id="q2-resumen" onclick="setQ(2)">Q2 · 26–10</button>
   </div>
-  <div id="resumen-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:16px"></div>
-  <div id="resumen-aniversarios" style="margin-bottom:14px"></div>
+  <div id="resumen-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:18px"></div>
+  <div class="rs-seccion">Avisos <span style="font-weight:400;text-transform:none;letter-spacing:0">— toca un panel para abrirlo</span></div>
   <div id="resumen-alertas"></div>
+  <div id="resumen-bloqueados"></div>
+  <div id="resumen-vencimientos"></div>
+  <div id="resumen-especiales"></div>
+  <div id="resumen-aniversarios"></div>
 </div>
 
 <!-- PÁGINAS TURNO -->
@@ -306,16 +315,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   </div>
   <div id="sv-body"><div class="empty">Cargando...</div></div>
 </div>
-<!-- HISTORIAL ANUAL -->
-<div class="page" id="page-historial">
-  <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-    <div><div class="sec-t">📈 Historial Acumulado Anual</div><div class="sec-s">Totales de incidencias por persona a lo largo de todo el año (no solo el mes en curso)</div></div>
-    <select id="h-anio" class="fi" style="width:80px" onchange="renderHistorial()"></select>
-    <select id="h-turno" class="fi" style="width:160px" onchange="renderHistorial()"><option value="">Todos los turnos</option><option value="tmat">Matutino</option><option value="vesp">Vespertino</option><option value="noct">Nocturno</option><option value="sup">Supervisoras</option><option value="ja">J. Acumulada</option></select>
-    <button class="btn btn-ghost" onclick="expCSVHistorial()">↓ CSV</button>
-  </div>
-  <div id="h-body"><div class="empty">Cargando...</div></div>
-</div>
 <!-- PERSONAL -->
 <div class="page" id="page-personal">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:10px">
@@ -356,8 +355,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <select id="tx-turno" class="fi" style="width:150px" onchange="renderTextra()"><option value="">Todos los turnos</option><option value="tmat">Matutino</option><option value="vesp">Vespertino</option><option value="noct">Nocturno</option><option value="sup">Supervisoras</option><option value="ja">J. Acumulada</option></select>
   </div>
   <div class="card"><div class="card-header"><span class="card-title">⏱ Tiempo Extra</span><span id="cnt-tx" class="card-count"></span><span id="tot-tx" style="font-size:11px;font-weight:700;color:var(--az);margin-left:6px"></span></div>
-  <div class="wrap"><table class="tbl"><thead><tr><th class="tl">No.Emp</th><th class="tl">Nombre</th><th class="tl">Turno cubierto</th><th class="tl">Fecha</th><th>Horas</th><th class="tl">Motivo</th><th class="tl">Capturado por</th><th></th></tr></thead>
-  <tbody id="tbody-tx"><tr><td colspan="8" class="empty">Sin registros</td></tr></tbody></table></div></div>
+  <div class="wrap"><table class="tbl"><thead><tr><th class="tl">Colaborador</th><th class="tl">Turno cubierto</th><th class="tl">Fecha</th><th>Horas</th><th class="tl">Motivo</th><th class="tl">Capturado por</th><th></th></tr></thead>
+  <tbody id="tbody-tx"><tr><td colspan="7" class="empty">Sin registros</td></tr></tbody></table></div></div>
 </div>
 
 <div id="mbar" class="mbar"><span class="mlbl" id="mcount">0 celdas</span></div>
@@ -725,7 +724,7 @@ function esDiaAplicable(p,turno,fechaStr){
   const dia=DIAS3[new Date(fechaStr+'T12:00:00').getDay()];
   return hm[turno].indexOf(dia)!==-1;
 }
-// Para reportes agregados por mes/año (Concentrado, Historial Anual): solo
+// Para reportes agregados por mes (Concentrado): solo
 // incluir a alguien bajo un turno que no es el suyo si su permuta/horario
 // mixto realmente se traslapa con ese mes o año — evita filas vacías de
 // alguien cuya permuta cae en otro período distinto al que se está viendo.
@@ -737,17 +736,6 @@ function perteneceATurnoEnMes(p,turno,mes,anio){
   if(perms){
     const inicioMes=fStr(anio,mes,1),finMes=fStr(anio,mes,new Date(anio,mes+1,0).getDate());
     return perms.some(pm=>pm.turno===turno&&pm.fIni<=finMes&&pm.fFin>=inicioMes);
-  }
-  return false;
-}
-function perteneceATurnoEnAnio(p,turno,anio){
-  if(p.turno===turno)return true;
-  const hm=parseHorarioMixto(p.horarioMixto);
-  if(hm&&hm[turno])return true;
-  const perms=parsePermutas(p.permuta);
-  if(perms){
-    const inicioAnio=fStr(anio,0,1),finAnio=fStr(anio,11,31);
-    return perms.some(pm=>pm.turno===turno&&pm.fIni<=finAnio&&pm.fFin>=inicioAnio);
   }
   return false;
 }
@@ -790,7 +778,6 @@ function renderPag(id){
   else if(id==='resumen')renderResumen();
   else if(id==='vacaciones')renderVacaciones();
   else if(id==='saldovac')renderSaldoVac();
-  else if(id==='historial')renderHistorial();
 }
 function camPeriodo(d){
   let {mes,anio,q}=Q;
@@ -1264,7 +1251,7 @@ function editPersonal(n){abrirModalPersonal(n,null);}
 function darDeBajaPersonal(noEmp){
   const p=DB.personal.filter(x=>x.noEmp===noEmp)[0];
   if(!p)return;
-  if(!confirm('¿Dar de baja a '+p.nombre+'? Dejará de aparecer en las tablas activas, pero todo su historial (incidencias, Concentrado, Historial Anual, vacaciones pasadas) se conserva.'))return;
+  if(!confirm('¿Dar de baja a '+p.nombre+'? Dejará de aparecer en las tablas activas, pero todo su historial (incidencias, Concentrado, vacaciones pasadas) se conserva.'))return;
   const hoy=new Date();
   const rec=Object.assign({},p,{activo:'0',fechaBaja:fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()),ultimaEdicionPor:USUARIO_ACTUAL?USUARIO_ACTUAL.nombre:'Sin identificar',ultimaEdicionFecha:fStr(hoy.getFullYear(),hoy.getMonth(),hoy.getDate())});
   const idx=DB.personal.findIndex(x=>x.noEmp===noEmp);
@@ -1543,6 +1530,15 @@ function irATurno(t){
   const btn=document.querySelector('.nav-tab[onclick*="\''+t+'\'"]');
   showPage(t,btn);
 }
+// Panel plegable para los avisos del Resumen. Recuerda si estaba abierto aunque
+// la página se vuelva a dibujar.
+const _RS_ABIERTOS={};
+function panelResumen(clave,icono,titulo,n,cuerpo,tono){
+  const col={rojo:'var(--rojo)',naranja:'var(--naranja)',azul:'var(--az)'}[tono]||'var(--txt3)';
+  return '<details class="rs-panel"'+(_RS_ABIERTOS[clave]?' open':'')+' ontoggle="_RS_ABIERTOS[\''+clave+'\']=this.open">'
+    +'<summary><span>'+icono+'</span><span>'+titulo+'</span><span class="rs-n" style="background:'+col+'">'+n+'</span></summary>'
+    +'<div class="rs-body">'+cuerpo+'</div></details>';
+}
 function renderResumen(){
   const {mes,anio,q}=Q;
   const dias=diasQ(mes,anio,q), fechas=dias.map(d=>d.fecha);
@@ -1586,9 +1582,10 @@ function renderResumen(){
   const alEl=document.getElementById('resumen-alertas');
   if(alEl){
     alEl.innerHTML = alT.length
-      ? '<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⚠️ Alertas del mes en curso</div>'
-        +alT.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'" style="cursor:pointer" title="Clic para ver las fechas" onclick="abrirDesgloseAlerta(\''+a.noEmp+'\',\''+a.turno+'\','+hoy.getMonth()+','+hoy.getFullYear()+',\''+a.tipo+'\')">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+' <span style="color:var(--txt3)">('+TLBL[a.turno]+')</span></div>').join('')+'</div>'
-      : '<div class="empty">Sin alertas de movimientos/pases este mes</div>';
+      ? panelResumen('alertas','⚠️','Alertas de movimientos y pases · mes en curso',alT.length,
+          alT.map(a=>'<div class="ai '+(a.tipo==='Ps'?'aps':'am')+'" style="cursor:pointer" title="Clic para ver las fechas" onclick="abrirDesgloseAlerta(\''+a.noEmp+'\',\''+a.turno+'\','+hoy.getMonth()+','+hoy.getFullYear()+',\''+a.tipo+'\')">'+(a.tipo==='Ps'?'🚨':'⚠️')+' <b>'+a.nombre+'</b> — '+a.msg+' <span style="color:var(--txt3)">('+TLBL[a.turno]+')</span></div>').join(''),
+          alT.some(a=>a.tipo==='Ps')?'rojo':'naranja')
+      : '';
   }
   renderAniversarios();
   renderBloqueados();
@@ -1620,8 +1617,8 @@ function renderBloqueados(){
   if(!el)return;
   const act=calcBloqueados();
   if(!act.length){el.innerHTML='';return;}
-  el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🔒 Bloqueados por Falta — sin autorizar Movimientos/Pases</div>'
-    +act.map(a=>'<div class="ai" style="background:var(--rojo2);border-left:3px solid var(--rojo)">🔒 <b>'+a.nombre+'</b> <span style="color:var(--txt3)">('+TLBL[a.turno]+')</span> — Falta el '+a.faltaFecha+' · se desbloquea el <b>'+a.desbloqueo+'</b> <span style="color:var(--txt3)">('+a.diasRest+' día'+(a.diasRest!==1?'s':'')+' restante'+(a.diasRest!==1?'s':'')+')</span></div>').join('')+'</div>';
+  el.innerHTML=panelResumen('bloqueados','🔒','Bloqueados por Falta — sin Movimientos/Pases',act.length,
+    act.map(a=>'<div class="ai" style="background:var(--rojo2);border-left:3px solid var(--rojo)">🔒 <b>'+a.nombre+'</b> <span style="color:var(--txt3)">('+TLBL[a.turno]+')</span> — Falta el '+a.faltaFecha+' · se desbloquea el <b>'+a.desbloqueo+'</b> <span style="color:var(--txt3)">('+a.diasRest+' día'+(a.diasRest!==1?'s':'')+' restante'+(a.diasRest!==1?'s':'')+')</span></div>').join(''),'rojo');
 }
 // ══════════════════════════════════════════════════════════
 // VENCIMIENTO DE PERIODO VACACIONAL — LFT: el derecho debe
@@ -1652,9 +1649,9 @@ function renderVencimientos(){
   if(!el)return;
   const lista=calcVencimientos(30);
   if(!lista.length){el.innerHTML='';return;}
-  el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⏳ Periodos vacacionales por vencer (≤30 días) sin agotar</div>'
-    +lista.map(v=>'<div class="ai" style="background:'+(v.diasRestantes<=7?'var(--rojo2)':'var(--naranja2)')+';border-left:3px solid '+(v.diasRestantes<=7?'var(--rojo)':'var(--naranja)')+'">'
-      +(v.diasRestantes<=7?'🔴':'🟠')+' <b>'+v.nombre+'</b> <span style="color:var(--txt3)">('+TLBL[v.turno]+')</span> — le quedan <b>'+v.saldo+' día'+(v.saldo!==1?'s':'')+'</b> sin tomar · vence el <b>'+v.vence+'</b> <span style="color:var(--txt3)">('+v.diasRestantes+' día'+(v.diasRestantes!==1?'s':'')+' restante'+(v.diasRestantes!==1?'s':'')+')</span></div>').join('')+'</div>';
+  el.innerHTML=panelResumen('vencimientos','⏳','Periodos vacacionales por vencer (≤30 días)',lista.length,
+    lista.map(v=>'<div class="ai" style="background:'+(v.diasRestantes<=7?'var(--rojo2)':'var(--naranja2)')+';border-left:3px solid '+(v.diasRestantes<=7?'var(--rojo)':'var(--naranja)')+'">'
+      +(v.diasRestantes<=7?'🔴':'🟠')+' <b>'+v.nombre+'</b> <span style="color:var(--txt3)">('+TLBL[v.turno]+')</span> — le quedan <b>'+v.saldo+' día'+(v.saldo!==1?'s':'')+'</b> sin tomar · vence el <b>'+v.vence+'</b> <span style="color:var(--txt3)">('+v.diasRestantes+' día'+(v.diasRestantes!==1?'s':'')+' restante'+(v.diasRestantes!==1?'s':'')+')</span></div>').join(''),lista.some(v=>v.diasRestantes<=7)?'rojo':'naranja');
 }
 // ══════════════════════════════════════════════════════════
 // HORARIOS ESPECIALES VIGENTES — vista rápida de quién anda con
@@ -1688,13 +1685,13 @@ function renderHorariosEspeciales(){
   const ICONO={mixto:'↔',permuta:null,lactancia:'🍼'};
   const COLOR={mixto:['#EEF2FF','#4F46E5'],permuta:['#F3E8FF','#7E22CE'],lactancia:['#FCE7F3','#BE185D']};
   const ETIQUETA={mixto:'horario mixto',permuta:'permuta',lactancia:'lactancia'};
-  el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🔀 Horarios especiales vigentes</div>'
-    +filas.map(f=>{
+  el.innerHTML=panelResumen('especiales','🔀','Horarios especiales vigentes',filas.length,
+    filas.map(f=>{
       const icono=f.tipo==='permuta'?(f.futura?'📅':'🔄'):ICONO[f.tipo];
       const [bg,color]=COLOR[f.tipo];
       const estado=(f.tipo==='permuta'||f.tipo==='lactancia')?(f.futura?' <span style="color:var(--txt3)">(próxima)</span>':' <span style="color:#15803D;font-weight:700">(vigente)</span>'):'';
       return '<div class="ai" style="background:'+bg+';border-left:3px solid '+color+'">'+icono+' <b>'+f.nombre+'</b> <span style="color:var(--txt3)">('+(TLBL[f.turno]||f.turno)+')</span> — '+ETIQUETA[f.tipo]+': '+f.detalle+estado+'</div>';
-    }).join('')+'</div>';
+    }).join(''),'azul');
 }
 function parseFechaIngreso(str){
   if(!str)return null;
@@ -1723,12 +1720,12 @@ function renderAniversarios(){
     }
   });
   lista.sort((a,b)=>a.dia-b.dia);
-  if(!lista.length){el.innerHTML='<div class="empty">Sin aniversarios de ingreso este mes</div>';return;}
-  el.innerHTML='<div class="ap"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🎉 Aniversarios de ingreso — '+MESES[mesActual].charAt(0).toUpperCase()+MESES[mesActual].slice(1)+'</div>'
-    +lista.map(a=>'<div class="ai" style="background:'+(a.esHoy?'#DCFCE7':'var(--bg2)')+';border-left:3px solid '+(a.esHoy?'#15803D':'var(--az)')+'">'
+  if(!lista.length){el.innerHTML='';return;}
+  el.innerHTML=panelResumen('aniversarios','🎉','Aniversarios de ingreso — '+MESES[mesActual].charAt(0).toUpperCase()+MESES[mesActual].slice(1),lista.length,
+    lista.map(a=>'<div class="ai" style="background:'+(a.esHoy?'#DCFCE7':'var(--bg2)')+';border-left:3px solid '+(a.esHoy?'#15803D':'var(--az)')+'">'
       +(a.esHoy?'🎂 ':(a.pasado?'✓ ':'📌 '))+'<b>'+a.nombre+'</b> — día '+a.dia+' · '+a.anios+TLBL[a.turno]
       +(a.esHoy?' <span style="font-weight:700;color:#15803D">¡Hoy!</span>':'')
-    +'</div>').join('')+'</div>';
+    +'</div>').join(''),'azul');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2663,55 +2660,6 @@ function expCSVSaldoVac(){
 }
 
 // ══════════════════════════════════════════════════════════
-// HISTORIAL ACUMULADO ANUAL
-// ══════════════════════════════════════════════════════════
-function initHistorialSelectAnio(){
-  const sel=document.getElementById('h-anio');
-  if(!sel||sel.options.length)return;
-  const hoy=new Date().getFullYear();
-  for(let a=hoy-2;a<=hoy+1;a++){const o=document.createElement('option');o.value=a;o.textContent=a;if(a===hoy)o.selected=true;sel.appendChild(o);}
-}
-function renderHistorial(){
-  initHistorialSelectAnio();
-  const anio=parseInt(document.getElementById('h-anio').value);
-  const ft=document.getElementById('h-turno').value;
-  const pers=DB.personal.filter(p=>!ft||perteneceATurnoEnAnio(p,ft,anio)).sort((a,b)=>a.nombre.localeCompare(b.nombre));
-  const body=document.getElementById('h-body');
-  if(!pers.length){body.innerHTML='<div class="empty">Sin personal</div>';return;}
-  const tipos=['F','R','I','V','M','B','Ps','Pe','LC','L'];
-  let filas='';
-  pers.forEach(p=>{
-    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getFullYear()===anio&&(!ft||esDiaAplicable(p,ft,i.fecha));});
-    const cnt={};tipos.forEach(t=>cnt[t]=0);
-    inc.forEach(i=>{if(cnt[i.incidencia]!==undefined)cnt[i.incidencia]++;});
-    const tot=Object.values(cnt).reduce((s,v)=>s+v,0);
-    if(!tot)return;
-    const reincidente=cnt['F']>=3||cnt['R']>=6;
-    filas+='<tr class="'+(reincidente?'alerta-ps':'')+'"><td class="tl"><span class="emp">'+p.noEmp+'</span></td><td class="tl"><span class="nom">'+p.nombre+(reincidente?' <span style="color:var(--rojo);font-size:9px;font-weight:700">⚠ reincidente</span>':'')+'</span></td><td class="tl"><span class="tbadge">'+TLBL[p.turno]+'</span></td>';
-    tipos.forEach(t=>{const v=cnt[t];let s=v>0?'font-weight:700;':'color:var(--txt3);';if(t==='F'&&v>=3)s='font-weight:700;color:var(--rojo);';filas+='<td style="text-align:center;'+s+'">'+(v||'–')+'</td>';});
-    filas+='<td style="text-align:center;font-weight:700;color:var(--az)">'+tot+'</td></tr>';
-  });
-  if(!filas){body.innerHTML='<div class="empty">Sin incidencias registradas en '+anio+'</div>';return;}
-  body.innerHTML='<div class="card"><div class="wrap"><table class="tbl"><thead><tr><th class="tl">No.Emp</th><th class="tl" style="min-width:170px">Nombre</th><th class="tl">Turno</th>'
-    +tipos.map(t=>'<th>'+t+'</th>').join('')+'<th>Total</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>'
-    +'<div style="font-size:10px;color:var(--txt3);margin-top:8px">"⚠ reincidente" marca a quien acumula 3+ Faltas o 6+ Retardos en el año — umbral orientativo, ajústalo si lo necesitas.</div>';
-}
-function expCSVHistorial(){
-  const anio=parseInt(document.getElementById('h-anio').value);
-  const ft=document.getElementById('h-turno').value;
-  const tipos=['F','R','I','V','M','B','Ps','Pe','LC','L'];
-  let csv='No.Emp,Nombre,Turno,'+tipos.join(',')+',Total\n';
-  DB.personal.filter(p=>!ft||perteneceATurnoEnAnio(p,ft,anio)).forEach(p=>{
-    const inc=DB.incidencias.filter(i=>{const d=new Date(i.fecha+'T12:00:00');return i.noEmp===p.noEmp&&d.getFullYear()===anio&&(!ft||esDiaAplicable(p,ft,i.fecha));});
-    const cnt={};tipos.forEach(t=>cnt[t]=0);inc.forEach(i=>{if(cnt[i.incidencia]!==undefined)cnt[i.incidencia]++;});
-    const tot=Object.values(cnt).reduce((s,v)=>s+v,0);
-    if(!tot)return;
-    csv+=p.noEmp+',"'+p.nombre+'",'+(TLBL[p.turno]||p.turno)+','+tipos.map(t=>cnt[t]).join(',')+','+tot+'\n';
-  });
-  dlCSV(csv,'HistorialAnual_'+anio);
-}
-
-// ══════════════════════════════════════════════════════════
 // TIEMPO EXTRA
 // ══════════════════════════════════════════════════════════
 function abrirModalTextra(tx){
@@ -2752,13 +2700,31 @@ function renderTextra(){
   document.getElementById('cnt-tx').textContent=lista.length+' registros';
   document.getElementById('tot-tx').textContent=tot>0?'⏱ '+tot+' hrs total':'';
   const tb=document.getElementById('tbody-tx');
-  if(!lista.length){tb.innerHTML='<tr><td colspan="8" class="empty">Sin registros en este período</td></tr>';return;}
-  tb.innerHTML=lista.map(t=>'<tr><td class="tl"><span class="emp">'+t.noEmp+'</span></td><td class="tl" style="font-weight:600">'+t.nombre+'</td>'
-    +'<td class="tl"><span class="tbadge" title="Empleado: '+(TLBL[t.turno]||t.turno)+'">'+(TLBL[t.turnoCubierto]||t.turnoCubierto||TLBL[t.turno]||t.turno)+'</span></td>'
-    +'<td class="tl">'+t.fecha+'</td><td style="text-align:center;font-weight:700;color:var(--az)">'+t.horas+' h</td>'
-    +'<td class="tl" style="color:var(--txt2)">'+t.motivo+'</td>'
-    +'<td class="tl" style="font-size:10px;color:var(--txt3)">'+(t.capturadoPor||'—')+'</td>'
-    +'<td><button class="btn btn-ghost" style="font-size:10px;padding:3px 7px" onclick="rPin(()=>abrirModalTextra(DB.textra.filter(x=>x.id===\''+t.id+'\')[0]))">✏</button></td></tr>').join('');
+  if(!lista.length){tb.innerHTML='<tr><td colspan="7" class="empty">Sin registros en este período</td></tr>';return;}
+  // Agrupar por colaborador (No. Emp; si falta, por nombre) y ordenar alfabéticamente
+  const grupos={};
+  lista.forEach(t=>{
+    const key=(t.noEmp&&t.noEmp!=='')?'n:'+t.noEmp:'x:'+(t.nombre||'').trim().toUpperCase();
+    if(!grupos[key])grupos[key]={nombre:t.nombre,noEmp:t.noEmp,items:[]};
+    grupos[key].items.push(t);
+  });
+  const claves=Object.keys(grupos).sort((a,b)=>(grupos[a].nombre||'').localeCompare(grupos[b].nombre||''));
+  let html='';
+  claves.forEach(k=>{
+    const g=grupos[k];
+    g.items.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    const hrs=Math.round(g.items.reduce((s,t)=>s+(parseFloat(t.horas)||0),0)*10)/10;
+    html+='<tr class="grp-hdr"><td colspan="7">👤 '+g.nombre+(g.noEmp?' <span class="emp" style="color:inherit;opacity:.7">· No. '+g.noEmp+'</span>':'')+' <span style="font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">— '+g.items.length+' registro'+(g.items.length!==1?'s':'')+' · <b style="color:var(--az)">'+hrs+' h</b> en este período</span></td></tr>';
+    g.items.forEach(t=>{
+      html+='<tr><td class="tl" style="padding-left:22px;color:var(--txt3)">↳</td>'
+        +'<td class="tl"><span class="tbadge" title="Empleado: '+(TLBL[t.turno]||t.turno)+'">'+(TLBL[t.turnoCubierto]||t.turnoCubierto||TLBL[t.turno]||t.turno)+'</span></td>'
+        +'<td class="tl">'+t.fecha+'</td><td style="text-align:center;font-weight:700;color:var(--az)">'+t.horas+' h</td>'
+        +'<td class="tl" style="color:var(--txt2)">'+t.motivo+'</td>'
+        +'<td class="tl" style="font-size:10px;color:var(--txt3)">'+(t.capturadoPor||'—')+'</td>'
+        +'<td><button class="btn btn-ghost" style="font-size:10px;padding:3px 7px" onclick="rPin(()=>abrirModalTextra(DB.textra.filter(x=>x.id===\''+t.id+'\')[0]))">✏</button></td></tr>';
+    });
+  });
+  tb.innerHTML=html;
 }
 
 // ══════════════════════════════════════════════════════════

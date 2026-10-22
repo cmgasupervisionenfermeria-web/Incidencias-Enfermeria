@@ -208,8 +208,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <div id="resumen-bloqueados"></div>
   </div>
   <div id="resumen-vencimientos"></div>
-  <div id="resumen-especiales"></div>
-  <div id="resumen-aniversarios"></div>
+  <div class="rs-2col">
+    <div id="resumen-especiales"></div>
+    <div id="resumen-aniversarios"></div>
+  </div>
   <div class="rs-seccion" style="margin-top:18px">Seguimiento por turno <span style="font-weight:400;text-transform:none;letter-spacing:0" id="resumen-fecha">...</span></div>
   <div class="period-bar" style="margin-bottom:12px">
     <div class="period-nav"><button onclick="camPeriodo(-1)">‹</button><span id="lbl-resumen" class="period-label">...</span><button onclick="camPeriodo(1)">›</button></div>
@@ -1551,7 +1553,7 @@ function irATurno(t){
 }
 // Panel plegable para los avisos del Resumen. Recuerda si estaba abierto aunque
 // la página se vuelva a dibujar.
-const _RS_ABIERTOS={alertas:true,bloqueados:true}; // alertas y bloqueos salen desplegados por defecto
+const _RS_ABIERTOS={alertas:true,bloqueados:true,especiales:true,aniversarios:true}; // alertas, bloqueos, horarios especiales y aniversarios salen desplegados por defecto
 function panelResumen(clave,icono,titulo,n,cuerpo,tono){
   const col={rojo:'var(--rojo)',naranja:'var(--naranja)',azul:'var(--az)'}[tono]||'var(--txt3)';
   return '<details class="rs-panel"'+(_RS_ABIERTOS[clave]?' open':'')+' ontoggle="_RS_ABIERTOS[\''+clave+'\']=this.open">'
@@ -1749,12 +1751,24 @@ function renderHorariosEspeciales(){
   const ICONO={mixto:'↔',permuta:null,lactancia:'🍼'};
   const COLOR={mixto:['#EEF2FF','#4F46E5'],permuta:['#F3E8FF','#7E22CE'],lactancia:['#FCE7F3','#BE185D']};
   const ETIQUETA={mixto:'horario mixto',permuta:'permuta',lactancia:'lactancia'};
-  el.innerHTML=panelResumen('especiales','🔀','Horarios especiales vigentes',filas.length,
-    filas.map(f=>{
-      const icono=f.tipo==='permuta'?(f.futura?'📅':'🔄'):ICONO[f.tipo];
-      const [bg,color]=COLOR[f.tipo];
-      const estado=(f.tipo==='permuta'||f.tipo==='lactancia')?(f.futura?' <span style="color:var(--txt3)">(próxima)</span>':' <span style="color:#15803D;font-weight:700">(vigente)</span>'):'';
-      return '<div class="ai" style="background:'+bg+';border-left:3px solid '+color+'">'+icono+' <b>'+f.nombre+'</b> <span style="color:var(--txt3)">('+(TLBL[f.turno]||f.turno)+')</span> — '+ETIQUETA[f.tipo]+': '+f.detalle+estado+'</div>';
+  // Una tarjeta por colaborador, con sus horarios especiales dentro
+  const porPersona={};
+  filas.forEach(f=>{
+    const k=f.nombre;
+    if(!porPersona[k])porPersona[k]={nombre:f.nombre,turno:f.turno,items:[]};
+    porPersona[k].items.push(f);
+  });
+  const claves=Object.keys(porPersona).sort((x,y)=>x.localeCompare(y));
+  el.innerHTML=panelResumen('especiales','🔀','Horarios especiales vigentes',claves.length+' colaborador'+(claves.length!==1?'es':''),
+    claves.map(k=>{
+      const g=porPersona[k];
+      return '<div class="rs-grp"><div class="rs-grp-h">👤 '+g.nombre+' <span>· '+(TLBL[g.turno]||g.turno)+'</span></div>'
+        +g.items.map(f=>{
+          const icono=f.tipo==='permuta'?(f.futura?'📅':'🔄'):ICONO[f.tipo];
+          const [bg,color]=COLOR[f.tipo];
+          const estado=(f.tipo==='permuta'||f.tipo==='lactancia')?(f.futura?' <span style="color:var(--txt3)">(próxima)</span>':' <span style="color:#15803D;font-weight:700">(vigente)</span>'):'';
+          return '<div class="ai" style="background:'+bg+';border-left:3px solid '+color+'">'+icono+' <b>'+ETIQUETA[f.tipo]+':</b> '+f.detalle+estado+'</div>';
+        }).join('')+'</div>';
     }).join(''),'azul');
 }
 function parseFechaIngreso(str){

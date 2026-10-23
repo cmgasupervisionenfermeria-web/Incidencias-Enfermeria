@@ -1173,9 +1173,17 @@ function actualizarCamposPorTurno(){
   const lbl=document.getElementById('lbl-fn');
   const inp=document.getElementById('fn');
   const nota=document.getElementById('nota-eventual');
-  if(lbl)lbl.textContent=esEventual?'No. Empleado (opcional)':'No. Empleado *';
-  if(inp)inp.placeholder=esEventual?'Se genera automático si lo dejas vacío':'46098';
+  if(lbl)lbl.textContent='No. Empleado (opcional)';
+  if(inp&&!inp.readOnly)inp.placeholder=esEventual?'Se genera automático (EV001…) si lo dejas vacío':'Vacío = S/N automático (SN001…)';
   if(nota)nota.style.display=esEventual?'block':'none';
+}
+// Personal que aún no tiene número oficial: se le asigna un identificador interno
+// SN001, SN002… (único, para no mezclar sus incidencias). Cuando RH le dé su número
+// real se cambia con «🔁 Cambiar No. Empleado» y todo su historial se mueve con él.
+function generarNoEmpSinNumero(){
+  const existentes=DB.personal.filter(p=>/^SN\d+$/.test(p.noEmp)).map(p=>parseInt(p.noEmp.slice(2),10)||0);
+  const max=existentes.length?Math.max(...existentes):0;
+  return 'SN'+String(max+1).padStart(3,'0');
 }
 function generarNoEmpEventual(){
   const existentes=DB.personal.filter(p=>/^EV\d+$/.test(p.noEmp)).map(p=>parseInt(p.noEmp.slice(2),10)||0);
@@ -1188,7 +1196,7 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
   const esPas=p&&p.tipo==='pasante';
   const esBaja=p&&p.activo==='0';
   const html=(esBaja?'<div style="background:#FEE2E2;color:#B91C1C;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:700;margin-bottom:12px">🚫 Este empleado está dado de baja'+(p.fechaBaja?' desde el '+p.fechaBaja:'')+'. Su historial se conserva; puedes reactivarlo abajo.</div>':'')
-    +'<div class="fr2"><div class="fr"><label class="fl" id="lbl-fn">No. Empleado *</label><input id="fn" class="fi" value="'+(p?p.noEmp:'')+'" placeholder="46098" '+(p?'readonly':'')+'></div>'
+    +'<div class="fr2"><div class="fr"><label class="fl" id="lbl-fn">No. Empleado (opcional)</label><input id="fn" class="fi" value="'+(p?p.noEmp:'')+'" placeholder="Vacío = S/N automático (SN001…)" '+(p?'readonly':'')+'></div>'
     +'<div class="fr"><label class="fl">Tipo *</label><select id="ft" class="fs" onchange="document.getElementById(\'ffr\').style.opacity=this.value===\'pasante\'?\'1\':\'0.4\'">'
     +'<option value="base"'+(!esPas?' selected':'')+'>Base</option><option value="pasante"'+(esPas?' selected':'')+'>Pasante</option></select></div></div>'
     +'<div class="fr"><label class="fl">Nombre completo *</label><input id="fno" class="fi" value="'+(p?p.nombre:'')+'" placeholder="APELLIDO Nombre"></div>'
@@ -1225,9 +1233,9 @@ function abrirModalPersonal(noEmpEdit,turnoDefault){
     let noEmp=document.getElementById('fn').value.trim();
     const nombre=document.getElementById('fno').value.trim();
     const turno=document.getElementById('ftu').value;
-    if(!noEmp&&turno==='eventual'&&!noEmpEdit)noEmp=generarNoEmpEventual();
-    if(!noEmp||!nombre){toast('Completa los campos obligatorios');return;}
-    if(!/[a-z0-9]/i.test(noEmp)){toast('⚠ El No. de Empleado no puede ser solo un punto o símbolo — usa un número real, o deja vacío en Tipo=Eventual para autogenerarlo');return;}
+    if(!noEmp&&!noEmpEdit)noEmp=(turno==='eventual')?generarNoEmpEventual():generarNoEmpSinNumero();
+    if(!noEmp||!nombre){toast('Falta el nombre completo');return;}
+    if(!/[a-z0-9]/i.test(noEmp)){toast('⚠ El No. de Empleado no puede ser solo un punto o símbolo — usa el número real, o déjalo vacío para que se asigne un S/N automático');return;}
     const puesto=document.getElementById('fpu').value.trim();
     const fechaIngreso=document.getElementById('fi').value.trim();
     const tipo=document.getElementById('ft').value;
